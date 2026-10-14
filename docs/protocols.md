@@ -1,4 +1,4 @@
-# M0 protocol verification
+# Historical Clawd M0 protocol verification: NOT PASSED
 
 ## Scope and evidence
 
@@ -63,4 +63,4 @@ Optional fields documented by Clawd: `cwd`, `tool_name`, `tool_use_id`, positive
 - No confirmation that an alert state is visibly available in the selected theme. If live work cannot demonstrate concurrency or alert state, the M0 decision gate requires stopping and proposing the AgentPet fork; this source-only follow-up does not satisfy that gate.
 - No real Firstmate ledger records were captured. The sample payload above is protocol documentation, not a ledger record. No fixtures are added rather than fabricate records or touch protected state.
 
-Accordingly, this is partial M0 protocol documentation only. Live proof remains blocked because no existing local Clawd installation or checkout was available, and this worker was instructed not to install or run Clawd.
+Accordingly, the historical Clawd M0 gate was NOT PASSED. This is partial protocol documentation only; live proof remains missing. The captain has superseded Path A with the native product; see [the archived charter](archive/legacy-path-a-charter.md) and [native app contract](native-app-contract.md).

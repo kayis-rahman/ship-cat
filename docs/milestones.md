@@ -1,6 +1,10 @@
 # Shipcat milestones
 
-All milestones remain local-only, Node.js 20+, ESM, zero-runtime-dependency, and tested with `node:test`. Ledger content is private: only home/task identity and documented pet state/event values may reach the pet endpoint. Live Clawd behavior is not assumed from fake-server tests.
+## Historical Clawd adapter milestones
+
+These Node.js milestones describe the superseded Path A implementation only. The original Clawd M0 was NOT PASSED: live route/registration/state, UI concurrency, and pet behavior were never verified. See [the archived charter](archive/legacy-path-a-charter.md) and [protocol evidence](protocols.md). Do not treat these milestones as the native app plan.
+
+All historical milestones are local-only, Node.js 20+, ESM, zero-runtime-dependency, and tested with `node:test`. Ledger content is private: only home/task identity and documented pet state/event values may reach the pet endpoint. Live Clawd behavior is not assumed from fake-server tests.
 
 ## M3 - CLI
 
