@@ -7,14 +7,14 @@ import { generateLaunchAgentPlist, resolveLaunchAgentOutput, writeLaunchAgentPli
 
 const HELP = `Usage:
   shipcat once --ledger PATH --home NAME --agent-id ID (--endpoint URL | --runtime-json PATH)
-  shipcat watch --ledger PATH --home NAME --agent-id ID (--endpoint URL | --runtime-json PATH) [--interval-ms N]
+  shipcat watch --ledger PATH --home NAME --agent-id ID (--endpoint URL | --runtime-json PATH) [--interval-ms N] [--nudges] [--nudge-interval-ms N]
   shipcat status --ledger PATH --home NAME
   shipcat service plist|install --ledger PATH --home NAME --agent-id ID (--endpoint URL | --runtime-json PATH) [--output PATH]
   shipcat service uninstall --output PATH
 
 Commands:
   once    Read currently available ledger records and send current task states.
-  watch   Poll the read-only ledger and update task states without waiting on retries.
+  watch   Poll the read-only ledger and update task states without waiting on retries; nudges are opt-in.
   status  Print text-free aggregate state counts; does not contact the pet endpoint.
   service Generate or inspect a user LaunchAgent plist; never calls launchctl.
 `;
@@ -39,6 +39,10 @@ export async function runCli(argv, { stdout = process.stdout, stderr = process.s
     stdout.write(HELP);
     return 0;
   }
+  if (options.values.nudges && command !== "watch") {
+    stderr.write("--nudges is only valid with watch\\n");
+    return 2;
+  }
   const required = ["ledger", "home"];
   if (command !== "status") required.push("agent-id");
   const missing = required.filter((name) => !options.values[name]);
@@ -47,8 +51,17 @@ export async function runCli(argv, { stdout = process.stdout, stderr = process.s
     return 2;
   }
   const intervalMs = Number(options.values["interval-ms"] ?? 1000);
+  const nudgeIntervalMs = Number(options.values["nudge-interval-ms"] ?? 300_000);
   if (command === "watch" && (!Number.isSafeInteger(intervalMs) || intervalMs < 10)) {
     stderr.write("--interval-ms must be an integer of at least 10\n");
+    return 2;
+  }
+  if (options.values.nudges && (!Number.isSafeInteger(nudgeIntervalMs) || nudgeIntervalMs < 1_000 || nudgeIntervalMs > 86_400_000)) {
+    stderr.write("--nudge-interval-ms must be between 1000 and 86400000 when --nudges is enabled\n");
+    return 2;
+  }
+  if (options.values["nudge-interval-ms"] && !options.values.nudges) {
+    stderr.write("--nudge-interval-ms requires --nudges\n");
     return 2;
   }
   if (command !== "status" && !options.values.endpoint && !options.values["runtime-json"]) {
@@ -82,6 +95,8 @@ export async function runCli(argv, { stdout = process.stdout, stderr = process.s
       agentId: options.values["agent-id"],
       endpoint: options.values.endpoint,
       runtimeJsonPath: options.values["runtime-json"],
+      nudges: Boolean(options.values.nudges),
+      nudgeIntervalMs,
     });
     if (command === "once") {
       try {
@@ -134,6 +149,14 @@ async function runServiceCommand(args, { stdout, stderr, cwd }) {
   }
   const values = parsed.values;
   try {
+    if (values["nudge-interval-ms"] && !values.nudges) throw new TypeError("--nudge-interval-ms requires --nudges");
+    if (values.nudges && operation === "uninstall") throw new TypeError("--nudges is not valid with uninstall");
+    if (values.nudges) {
+      const interval = Number(values["nudge-interval-ms"] ?? 300_000);
+      if (!Number.isSafeInteger(interval) || interval < 1_000 || interval > 86_400_000) {
+        throw new RangeError("--nudge-interval-ms must be between 1000 and 86400000");
+      }
+    }
     if (operation === "uninstall") {
       if (!values.output) throw new TypeError("--output is required for service uninstall");
       const target = resolveLaunchAgentOutput(values.output, { cwd });
@@ -143,6 +166,7 @@ async function runServiceCommand(args, { stdout, stderr, cwd }) {
     const options = {
       ledger: values.ledger, home: values.home, agentId: values["agent-id"],
       endpoint: values.endpoint, runtimeJsonPath: values["runtime-json"], label: values.label,
+      nudges: Boolean(values.nudges), nudgeIntervalMs: values["nudge-interval-ms"],
     };
     if (operation === "install" && !values.output) throw new TypeError("--output is required for service install");
     if (values.output) {
@@ -165,7 +189,12 @@ function parseOptions(args) {
     if (argument === "--help" || argument === "-h") return { values, help: true };
     if (!argument.startsWith("--")) return { values, error: `Unexpected argument: ${argument}` };
     const key = argument.slice(2);
-    if (!["ledger", "home", "agent-id", "endpoint", "runtime-json", "interval-ms", "output", "label"].includes(key)) {
+    if (key === "nudges") {
+      if (values.nudges) return { values, error: "Duplicate option: --nudges" };
+      values.nudges = true;
+      continue;
+    }
+    if (!["ledger", "home", "agent-id", "endpoint", "runtime-json", "interval-ms", "nudge-interval-ms", "output", "label"].includes(key)) {
       return { values, error: `Unknown option: ${argument}` };
     }
     if (values[key] !== undefined) return { values, error: `Duplicate option: ${argument}` };

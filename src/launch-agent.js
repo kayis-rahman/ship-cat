@@ -11,14 +11,20 @@ export function generateLaunchAgentPlist({
   endpoint,
   runtimeJsonPath,
   label = "local.shipcat.bridge",
+  nudges = false,
+  nudgeIntervalMs = 300_000,
   nodePath = process.execPath,
 } = {}) {
   if (!ledger || !home || !agentId || Boolean(endpoint) === Boolean(runtimeJsonPath)) {
     throw new TypeError("ledger, home, agentId, and exactly one of endpoint or runtimeJsonPath are required");
   }
+  if (typeof nudges !== "boolean" || (nudges && (!Number.isSafeInteger(nudgeIntervalMs) || nudgeIntervalMs < 1_000 || nudgeIntervalMs > 86_400_000))) {
+    throw new RangeError("enabled nudge intervals must be between 1000 and 86400000 ms");
+  }
   const argumentsList = [nodePath, CLI_PATH, "watch", "--ledger", ledger, "--home", home, "--agent-id", agentId];
   if (endpoint) argumentsList.push("--endpoint", endpoint);
   if (runtimeJsonPath) argumentsList.push("--runtime-json", runtimeJsonPath);
+  if (nudges) argumentsList.push("--nudges", "--nudge-interval-ms", String(nudgeIntervalMs));
   const args = argumentsList.map((value) => `    <string>${escapeXml(value)}</string>`).join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

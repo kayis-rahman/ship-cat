@@ -137,6 +137,53 @@ test("retries endpoint errors with bounded exponential backoff", async () => {
   }
 });
 
+test("alert nudges are off by default and opt-in nudges respect their interval", async () => {
+  const defaultServer = await fakePetServer();
+  let now = 1_000;
+  const defaultSink = createPetSink({
+    agentId: "custom-shipcat-test", endpoint: defaultServer.endpoint, logger: silentLogger,
+    now: () => now,
+  });
+  try {
+    const alert = { sessionId: "alert-session", state: "notification", event: "Notification", alert: true };
+    defaultSink.update(alert);
+    await defaultSink.flush();
+    now += 10_000;
+    defaultSink.update(alert);
+    await defaultSink.flush();
+    assert.equal(defaultServer.received.length, 1);
+  } finally {
+    await defaultSink.stop();
+    await defaultServer.close();
+  }
+
+  const nudgedServer = await fakePetServer();
+  now = 2_000;
+  const nudgedSink = createPetSink({
+    agentId: "custom-shipcat-test", endpoint: nudgedServer.endpoint, logger: silentLogger,
+    nudges: true, nudgeIntervalMs: 1_000, now: () => now,
+  });
+  try {
+    const alert = { sessionId: "alert-session", state: "notification", event: "Notification", alert: true };
+    nudgedSink.update(alert);
+    await nudgedSink.flush();
+    now += 999;
+    nudgedSink.update(alert);
+    await nudgedSink.flush();
+    assert.equal(nudgedServer.received.length, 1);
+    now += 1;
+    nudgedSink.update(alert);
+    await nudgedSink.flush();
+    assert.equal(nudgedServer.received.length, 2);
+    for (const { payload } of nudgedServer.received) {
+      assert.deepEqual(Object.keys(payload).sort(), ["agent_id", "event", "session_id", "state"]);
+    }
+  } finally {
+    await nudgedSink.stop();
+    await nudgedServer.close();
+  }
+});
+
 test("endpoint outage is bounded and does not block ledger reading", async () => {
   await withTempDir(async (dir) => {
     const ledger = join(dir, "ledger.jsonl");

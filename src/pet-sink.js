@@ -20,6 +20,9 @@ export function createPetSink({
   maxAttempts = 5,
   baseDelayMs = 100,
   maxDelayMs = 2_000,
+  nudges = false,
+  nudgeIntervalMs = 300_000,
+  now = Date.now,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 } = {}) {
   if (typeof agentId !== "string" || !agentId) throw new TypeError("agentId is required");
@@ -28,10 +31,15 @@ export function createPetSink({
   if (!Number.isFinite(baseDelayMs) || baseDelayMs < 0 || !Number.isFinite(maxDelayMs) || maxDelayMs < 0) {
     throw new RangeError("backoff delays must be non-negative");
   }
+  if (typeof nudges !== "boolean" || typeof now !== "function") throw new TypeError("nudges must be boolean and now must be a function");
+  if (!Number.isSafeInteger(nudgeIntervalMs) || nudgeIntervalMs < 1 || nudgeIntervalMs > 86_400_000) {
+    throw new RangeError("nudgeIntervalMs must be between 1 and 86400000");
+  }
 
   const queue = [];
   const desired = new Map();
   const delivered = new Map();
+  const lastNudgeAt = new Map();
   const successfulPayloads = [];
   let running = false;
   let stopped = false;
@@ -72,10 +80,16 @@ export function createPetSink({
       }
       const signature = commandSignature(command);
       const queued = queue.some((item) => item.command.sessionId === command.sessionId && item.signature === signature);
-      if (desired.get(command.sessionId) === signature &&
-          (queued || delivered.get(command.sessionId) === signature)) continue;
+      const sameDesired = desired.get(command.sessionId) === signature;
+      const sameDelivered = delivered.get(command.sessionId) === signature;
+      if (sameDesired && queued) continue;
+      if (sameDesired && sameDelivered) {
+        const lastNudge = lastNudgeAt.get(command.sessionId) ?? now();
+        if (!nudges || !command.alert || now() - lastNudge < nudgeIntervalMs) continue;
+      } else if (sameDelivered && !queued) {
+        continue;
+      }
       desired.set(command.sessionId, signature);
-      if (delivered.get(command.sessionId) === signature && !queued) continue;
       queue.push({ command: { ...command }, signature });
     }
     kick();
@@ -114,6 +128,8 @@ export function createPetSink({
             });
             if (response?.status === 200) {
               delivered.set(item.command.sessionId, item.signature);
+              if (item.command.alert) lastNudgeAt.set(item.command.sessionId, now());
+              else lastNudgeAt.delete(item.command.sessionId);
               successfulPayloads.push(payload);
               deliveredItem = true;
               break;
