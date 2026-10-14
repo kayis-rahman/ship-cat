@@ -2,7 +2,7 @@
 
 This is a tag-ready archive note for Shipcat's former Path A adapter. The JavaScript package remains in `src/`, `test/`, and `scripts/` as a migration reference; it has not been removed and its history is intact. The native macOS app is the current product. Do not use this adapter as an app dependency or infer native app parity from its tests.
 
-The former package targeted Node.js 20+, read a local Firstmate ledger, and mapped lifecycle records to a Clawd-on-Desk loopback `/state` endpoint. It provided the `once`, `watch`, and `status` CLI commands, an opt-in LaunchAgent plist generator, and optional repeated nudges. Those CLI, Clawd, LaunchAgent, and nudge features are retired from the native product scope.
+The former package targeted Node.js 20+, read a local Firstmate ledger, and mapped lifecycle records to a Clawd-on-Desk loopback `/state` endpoint. It provided the `once`, `watch`, and `status` CLI commands, `service install` and `service uninstall` guidance for an opt-in LaunchAgent plist, and optional repeated nudges. Its opt-in `scripts/live-smoke.sh` is not part of `npm test`. Those CLI, Clawd, LaunchAgent, and nudge features are retired from the native product scope.
 
 ## Tag-ready note
 
