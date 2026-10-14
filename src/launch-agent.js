@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, realpath, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -56,10 +56,37 @@ export function resolveLaunchAgentOutput(outputPath, { cwd = process.cwd() } = {
 }
 
 export async function writeLaunchAgentPlist(outputPath, options, { cwd = process.cwd() } = {}) {
+  const root = resolve(cwd);
+  const realRoot = await realpath(root);
   const target = resolveLaunchAgentOutput(outputPath, { cwd });
+  await assertExistingAncestorsStayInside(root, dirname(target));
   await mkdir(dirname(target), { recursive: true });
+  await assertRealPathInside(realRoot, await realpath(dirname(target)));
   await writeFile(target, generateLaunchAgentPlist(options), { encoding: "utf8", flag: "w" });
   return target;
+}
+
+async function assertExistingAncestorsStayInside(root, directory) {
+  const realRoot = await realpath(root);
+  let candidate = directory;
+  while (candidate !== root) {
+    try {
+      await assertRealPathInside(realRoot, await realpath(candidate));
+      return;
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      const parent = dirname(candidate);
+      if (parent === candidate) break;
+      candidate = parent;
+    }
+  }
+}
+
+async function assertRealPathInside(root, target) {
+  const relativeTarget = relative(root, target);
+  if (relativeTarget === ".." || relativeTarget.startsWith(`..${sep}`) || isAbsolute(relativeTarget)) {
+    throw new RangeError("plist output cannot escape the repository through a symlink");
+  }
 }
 
 function escapeXml(value) {

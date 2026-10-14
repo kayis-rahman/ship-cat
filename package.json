@@ -6,6 +6,9 @@
   "engines": {
     "node": ">=20"
   },
+  "bin": {
+    "shipcat": "./src/cli.js"
+  },
   "scripts": {
     "test": "node --test"
   }

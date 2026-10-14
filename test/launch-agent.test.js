@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateLaunchAgentPlist, resolveLaunchAgentOutput, writeLaunchAgentPlist } from "../src/launch-agent.js";
@@ -30,6 +30,9 @@ test("plist generator escapes XML and points only to the watch CLI", () => {
   assert.match(plist, /<string>watch<\/string>/);
   assert.match(plist, /<key>RunAtLoad<\/key>/);
   assert.doesNotMatch(plist, /launchctl/);
+  const nudged = generateLaunchAgentPlist({ ...options, nudges: true, nudgeIntervalMs: 5_000 });
+  assert.match(nudged, /<string>--nudges<\/string>/);
+  assert.match(nudged, /<string>5000<\/string>/);
 });
 
 test("plist write is restricted beneath the selected output directory", async () => {
@@ -39,6 +42,13 @@ test("plist write is restricted beneath the selected output directory", async ()
     assert.equal(resolveLaunchAgentOutput("output/agent.plist", { cwd: dir }), target);
     assert.throws(() => resolveLaunchAgentOutput("../outside.plist", { cwd: dir }), /beneath/);
     assert.throws(() => resolveLaunchAgentOutput(".", { cwd: dir }), /beneath/);
+    const outside = await mkdtemp(join(tmpdir(), "shipcat-outside-"));
+    try {
+      await symlink(outside, join(dir, "escape"), "dir");
+      await assert.rejects(writeLaunchAgentPlist("escape/agent.plist", options, { cwd: dir }), /symlink/);
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
   });
 });
 

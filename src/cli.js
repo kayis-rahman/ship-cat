@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { pathToFileURL } from "node:url";
 import { createLedgerReader } from "./ledger-reader.js";
 import { createLedgerReducer } from "./ledger-reducer.js";
@@ -139,14 +140,15 @@ export async function runCli(argv, { stdout = process.stdout, stderr = process.s
 async function runServiceCommand(args, { stdout, stderr, cwd }) {
   const [operation, ...optionArgs] = args;
   if (!["plist", "install", "uninstall"].includes(operation)) {
-    stderr.write("Usage: shipcat service plist|install|uninstall [options]\\n");
+    stderr.write("Usage: shipcat service plist|install|uninstall [options]\n");
     return 2;
   }
   const parsed = parseOptions(optionArgs);
   if (parsed.error) {
-    stderr.write(`${parsed.error}\\n`);
+    stderr.write(`${parsed.error}\n`);
     return 2;
   }
+  if (parsed.help) { stdout.write(HELP); return 0; }
   const values = parsed.values;
   try {
     if (values["nudge-interval-ms"] && !values.nudges) throw new TypeError("--nudge-interval-ms requires --nudges");
@@ -160,24 +162,24 @@ async function runServiceCommand(args, { stdout, stderr, cwd }) {
     if (operation === "uninstall") {
       if (!values.output) throw new TypeError("--output is required for service uninstall");
       const target = resolveLaunchAgentOutput(values.output, { cwd });
-      stdout.write(`Generated plist: ${target}\\nRemove that file manually if desired. No launchctl command was run.\\n`);
+      stdout.write(`Generated plist: ${target}\nRemove that file manually if desired. No launchctl command was run.\n`);
       return 0;
     }
     const options = {
       ledger: values.ledger, home: values.home, agentId: values["agent-id"],
       endpoint: values.endpoint, runtimeJsonPath: values["runtime-json"], label: values.label,
-      nudges: Boolean(values.nudges), nudgeIntervalMs: values["nudge-interval-ms"],
+      nudges: Boolean(values.nudges), nudgeIntervalMs: Number(values["nudge-interval-ms"] ?? 300_000),
     };
     if (operation === "install" && !values.output) throw new TypeError("--output is required for service install");
     if (values.output) {
       const target = await writeLaunchAgentPlist(values.output, options, { cwd });
-      stdout.write(`LaunchAgent plist written to ${target}. It was not loaded.\\n`);
+      stdout.write(`LaunchAgent plist written to ${target}. It was not loaded.\n`);
     } else {
       stdout.write(generateLaunchAgentPlist(options));
     }
     return 0;
   } catch (error) {
-    stderr.write(`shipcat service: ${error.message}\\n`);
+    stderr.write(`shipcat service: ${error.message}\n`);
     return 1;
   }
 }
