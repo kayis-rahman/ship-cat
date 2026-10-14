@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import { pathToFileURL } from "node:url";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { dirname, resolve } from "node:path";
 import { createLedgerReader } from "./ledger-reader.js";
 import { createLedgerReducer } from "./ledger-reducer.js";
 import { createPetMapper } from "./pet-mapper.js";
@@ -7,8 +10,8 @@ import { createPetSink } from "./pet-sink.js";
 import { generateLaunchAgentPlist, resolveLaunchAgentOutput, writeLaunchAgentPlist } from "./launch-agent.js";
 
 const HELP = `Usage:
-  shipcat once --ledger PATH --home NAME --agent-id ID (--endpoint URL | --runtime-json PATH)
-  shipcat watch --ledger PATH --home NAME --agent-id ID (--endpoint URL | --runtime-json PATH) [--interval-ms N] [--nudges] [--nudge-interval-ms N]
+  shipcat once --ledger PATH --home NAME --agent-id ID (--endpoint URL | --runtime-json PATH) [--checkpoint PATH]
+  shipcat watch --ledger PATH --home NAME --agent-id ID (--endpoint URL | --runtime-json PATH) [--interval-ms N] [--checkpoint PATH] [--nudges] [--nudge-interval-ms N]
   shipcat status --ledger PATH --home NAME
   shipcat service plist|install --ledger PATH --home NAME --agent-id ID (--endpoint URL | --runtime-json PATH) [--output PATH]
   shipcat service uninstall --output PATH
@@ -41,7 +44,7 @@ export async function runCli(argv, { stdout = process.stdout, stderr = process.s
     return 0;
   }
   if (options.values.nudges && command !== "watch") {
-    stderr.write("--nudges is only valid with watch\\n");
+    stderr.write("--nudges is only valid with watch\n");
     return 2;
   }
   const required = ["ledger", "home"];
@@ -71,11 +74,15 @@ export async function runCli(argv, { stdout = process.stdout, stderr = process.s
   }
 
   try {
+    if (options.values.checkpoint && resolve(options.values.checkpoint) === resolve(options.values.ledger)) {
+      throw new TypeError("--checkpoint must not overwrite the ledger");
+    }
     const reader = createLedgerReader([{ path: options.values.ledger, home: options.values.home }]);
     const reducer = createLedgerReducer();
     const mapper = createPetMapper({ logger: { debug() {} } });
     const applyAvailable = async () => {
       for (const envelope of await reader.read()) reducer.apply(envelope);
+      if (options.values.checkpoint) await saveOffsetCheckpoint(options.values.checkpoint, reader.offsets(), { cwd });
       return reducer.snapshot();
     };
 
@@ -101,8 +108,14 @@ export async function runCli(argv, { stdout = process.stdout, stderr = process.s
     });
     if (command === "once") {
       try {
-        sink.update(mapper.mapSnapshot(await applyAvailable()));
+        const commands = mapper.mapSnapshot(await applyAvailable());
+        sink.update(commands);
         await sink.flush();
+        const delivered = new Set(sink.snapshot().delivered);
+        if (commands.some((command) => !delivered.has(command.sessionId))) {
+          stderr.write("shipcat: one or more pet updates were not accepted\n");
+          return 1;
+        }
         return 0;
       } finally {
         await sink.stop();
@@ -134,6 +147,18 @@ export async function runCli(argv, { stdout = process.stdout, stderr = process.s
   } catch (error) {
     stderr.write(`shipcat: ${error.message}\n`);
     return 1;
+  }
+}
+
+async function saveOffsetCheckpoint(path, offsets, { cwd = process.cwd() } = {}) {
+  const target = resolve(cwd, path);
+  await mkdir(dirname(target), { recursive: true });
+  const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporary, `${JSON.stringify({ version: 1, offsets })}\n`, { encoding: "utf8", flag: "wx" });
+    await rename(temporary, target);
+  } finally {
+    await rm(temporary, { force: true });
   }
 }
 
@@ -196,7 +221,7 @@ function parseOptions(args) {
       values.nudges = true;
       continue;
     }
-    if (!["ledger", "home", "agent-id", "endpoint", "runtime-json", "interval-ms", "nudge-interval-ms", "output", "label"].includes(key)) {
+    if (!["ledger", "home", "agent-id", "endpoint", "runtime-json", "interval-ms", "nudge-interval-ms", "checkpoint", "output", "label"].includes(key)) {
       return { values, error: `Unknown option: ${argument}` };
     }
     if (values[key] !== undefined) return { values, error: `Duplicate option: ${argument}` };

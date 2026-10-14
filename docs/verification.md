@@ -6,10 +6,10 @@ Run `npm test` (Node.js 20+) for the local validation suite. The suite uses temp
 
 - M1 reader/reducer behavior remains covered, including duplicates, reordered status input, and per-home task identity.
 - M2 lifecycle mapping, one stable session per home/task, payload allowlisting, cleanup, duplicate updates, matching in-memory decision-key resolution, endpoint discovery, retry/backoff, bounded outage handling, and reader non-blocking behavior.
-- M3 `once`, `watch`, and `status` command behavior against temporary ledgers and a fake pet endpoint; watch exits cleanly on SIGINT.
+- M3 real CLI child-process end-to-end tests for two home ledgers, once/watch transitions, outage recovery, bounded retry attempts, checkpoint offsets across restarts, and clean SIGTERM shutdown; watch continues reading while the sink is unavailable.
 - M4 plist XML escaping and output-path containment; service install writes only a plist and uninstall only prints guidance.
 - M5 nudges are off by default and opt-in nudges respect their configured rate limit while preserving the payload allowlist.
-- M6 package bin metadata, documented configuration, zero runtime dependencies, and the complete `node:test` suite.
+- M6 package bin metadata, executable CLI, documented configuration, zero runtime dependencies, and the complete `node:test` suite. The opt-in live smoke script is not part of the test suite and was not run.
 
 ## Not verified live
 

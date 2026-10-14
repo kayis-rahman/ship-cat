@@ -6,6 +6,7 @@ All milestones remain local-only, Node.js 20+, ESM, zero-runtime-dependency, and
 
 - Provide `shipcat once`, `shipcat watch`, and `shipcat status` for an explicitly selected JSONL ledger and home identity.
 - `once` reads available records, reduces them, maps current tasks, and submits to the configured local pet endpoint; `watch` repeats without waiting for sink retries; `status` prints a text-free aggregate summary.
+- Optional `--checkpoint PATH` atomically records byte offsets; restart reconstructs reducer state by replaying the canonical ledger and refreshes the saved offsets.
 - Validate arguments, support `--help`, and keep reader/reducer APIs unchanged. Exercise commands end-to-end with temporary ledgers and a fake HTTP pet server.
 
 ## M4 - Resident service artifact

@@ -8,7 +8,7 @@ Shipcat has no runtime dependencies and reads the ledger read-only. Pass all pat
 - `--home NAME`: project/home identity attached to reader records and used with the task ID to derive a stable pet session ID.
 - `--interval-ms N`: `watch` polling interval, integer at least 10 ms (default 1000).
 
-`status` needs only `--ledger` and `--home`; it outputs aggregate counts, not task descriptions or raw records.
+`status` needs only `--ledger` and `--home`; it outputs aggregate counts, not task descriptions or raw records. Optional `--checkpoint PATH` atomically stores the reader's byte offsets (source path, home, and offset), not ledger contents. A process restart replays the canonical ledger to rebuild the reducer, then updates the checkpoint; the current reader API does not seek from a saved offset.
 
 ## Pet options
 
