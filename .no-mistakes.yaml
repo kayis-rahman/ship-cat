@@ -1,0 +1,3 @@
+commands:
+  test: swift test
+  build: xcodebuild -project Shipcat.xcodeproj -scheme ShipcatPet -configuration Release -sdk macosx CODE_SIGNING_ALLOWED=NO build
