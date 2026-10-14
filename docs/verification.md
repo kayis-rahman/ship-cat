@@ -1,6 +1,16 @@
 # Verification status
 
-Run `npm test` (Node.js 20+) for the local validation suite. The suite uses temporary JSONL ledgers, fake HTTP pet servers, and generated plist text; it does not install Clawd or launch a background service.
+## Native macOS app
+
+Run `swift test` for the native core suite and `xcodebuild -project Shipcat.xcodeproj -scheme ShipcatPet -configuration Debug -sdk macosx CODE_SIGNING_ALLOWED=NO build` for the app build. The Swift suite passed 7 tests in two suites. The app built successfully, and running its `--render-test` path asserted window style/level/Spaces properties and generated `/tmp/shipcat-pet-render.png` (7,802 bytes). The snapshot was inspected as an in-app render, not captured from the screen.
+
+The native suite uses fabricated records only. It covers the canonical dispatch and status wire shapes, all supported events, unknown-event ignore, secret-marker non-disclosure, complete and partial lines, malformed input, replacement/truncation, replay dedupe, multi-home identity, and status-before-dispatch. No real fleet ledger was read or written, and there is no network path in the native reader.
+
+Not visually/live verified: actual desktop placement, Spaces/full-screen and multi-display behavior, accessibility in VoiceOver, user notification permission/delivery, Focus behavior, `SMAppService` login/logout, or a live ledger selected by a user. No screencapture was used. Signing, notarization, stapling, clean-user install, and actual release were not run; see [distribution prerequisites](distribution.md).
+
+## Historical JavaScript adapter
+
+Run `npm test` (Node.js 20+) for the legacy adapter validation suite. The suite uses temporary JSONL ledgers, fake HTTP pet servers, and generated plist text; it does not install Clawd or launch a background service. Its tests do not establish native app parity.
 
 ## Verified locally
 
@@ -17,4 +27,4 @@ Run `npm test` (Node.js 20+) for the local validation suite. The suite uses temp
 - Any LaunchAgent load, start, restart, or uninstall behavior. Shipcat intentionally does not call `launchctl` or modify launchd state.
 - Real Firstmate ledger files or any writes to Firstmate state. No live pet, OS notification, or telemetry was used.
 
-Fake-server success proves only Shipcat's local HTTP contract and payload construction. It is not evidence that Clawd or a selected theme accepts or visibly renders a state.
+Fake-server success proves only the legacy JavaScript adapter's local HTTP contract and payload construction. It is not evidence that Clawd or a selected theme accepts or visibly renders a state.

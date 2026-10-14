@@ -1,5 +1,17 @@
 # Shipcat milestones
 
+## Native app milestones
+
+The current milestones supersede the historical adapter plan. Native app acceptance and distribution are specified in [the product contract](native-app-contract.md) and [distribution guide](distribution.md).
+
+- **M0 complete:** historical Clawd M0 marked NOT PASSED, Path A charter archived, native product contract recorded.
+- **M1 complete:** Swift model for canonical v1 lifecycle events; unknown events ignored; fabricated dispatched/status fixtures and secret-text privacy test.
+- **M2 complete:** read-only complete-line tailer and reducer with malformed/partial data, replacement/truncation, replay dedupe, multiple homes, and status-before-dispatch tests.
+- **M3 complete:** SwiftUI/AppKit floating pet and menu bar controls, lifecycle animation, accessibility labels, and a launch-time window-property/PNG render assertion.
+- **M4 implemented:** opt-in, non-repeating lifecycle notification flow and `SMAppService` login control. User permission and login-item behavior still need live GUI verification.
+- **M5 complete:** Xcode app project, macOS 14 deployment target, hardened-runtime/non-sandbox entitlements, Developer ID DMG/notarization/staple script. Dry-run only; no Apple credentials or release operations used.
+- **M6 complete:** native docs and legacy-JS parity checklist/archive note. JS source/history retained; parity gate remains open.
+
 ## Historical Clawd adapter milestones
 
 These Node.js milestones describe the superseded Path A implementation only. The original Clawd M0 was NOT PASSED: live route/registration/state, UI concurrency, and pet behavior were never verified. See [the archived charter](archive/legacy-path-a-charter.md) and [protocol evidence](protocols.md). Do not treat these milestones as the native app plan.
