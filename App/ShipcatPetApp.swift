@@ -145,7 +145,7 @@ private final class LifecycleNotifier {
 
     func deliver(event: LedgerEvent, home: String) {
         guard defaults.bool(forKey: enabledKey) else { return }
-        let source = "\(home)\u{0}\(event.task)\u{0}\(event.kind.rawValue)\u{0}\(event.timestamp ?? 0)"
+        let source = "\(home)\u{0}\(event.task)\u{0}\(event.kind.rawValue)\u{0}\(event.timestamp ?? 0)\u{0}\(event.lifecycle.rawValue)"
         let hash = SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
         var seen = Set(defaults.stringArray(forKey: seenKey) ?? [])
         guard seen.insert(hash).inserted else { return }
