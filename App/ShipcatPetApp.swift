@@ -1,5 +1,9 @@
 import AppKit
+import CryptoKit
+import ServiceManagement
 import SwiftUI
+import UserNotifications
+import UniformTypeIdentifiers
 
 @main
 struct ShipcatPetApp: App {
@@ -30,6 +34,10 @@ final class PetController: NSObject {
     private var statusItem: NSStatusItem!
     private var paused = false
     private var lifecycle: Lifecycle = .idle
+    private let notifier = LifecycleNotifier()
+    private var tailer: LedgerTailer?
+    private var reducer = LedgerReducer()
+    private var ledgerTimer: Timer?
 
     func show() {
         if panel == nil {
@@ -73,6 +81,9 @@ final class PetController: NSObject {
         menu.addItem(NSMenuItem(title: "Show Pet", action: #selector(showPet), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Hide Pet", action: #selector(hidePet), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Pause / Resume", action: #selector(pausePet), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Choose Fleet Ledger…", action: #selector(chooseLedger), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Enable Lifecycle Notifications…", action: #selector(enableNotifications), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Start at Login", action: #selector(toggleLoginItem), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Shipcat", action: #selector(quit), keyEquivalent: "q"))
         for item in menu.items { item.target = self }
@@ -81,8 +92,69 @@ final class PetController: NSObject {
     @objc private func showPet() { show() }
     @objc private func hidePet() { hide() }
     @objc private func pausePet() { togglePause() }
+    @objc private func chooseLedger() {
+        let picker = NSOpenPanel()
+        picker.allowedContentTypes = [.json]
+        picker.allowsOtherFileTypes = true
+        picker.canChooseDirectories = false
+        picker.canChooseFiles = true
+        guard picker.runModal() == .OK, let url = picker.url else { return }
+        startMonitoring(url: url, home: url.deletingLastPathComponent().lastPathComponent)
+    }
+    private func startMonitoring(url: URL, home: String) {
+        tailer = LedgerTailer()
+        reducer = LedgerReducer()
+        ledgerTimer?.invalidate()
+        pollLedger(url: url, home: home)
+        ledgerTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.pollLedger(url: url, home: home) }
+        }
+    }
+    private func pollLedger(url: URL, home: String) {
+        guard let tailer else { return }
+        for event in tailer.read(url: url, home: home) where reducer.apply(event, home: home) {
+            lifecycle = event.lifecycle
+            notifier.deliver(event: event, home: home)
+        }
+        updateView()
+    }
+    @objc private func enableNotifications() { notifier.requestOptIn() }
+    @objc private func toggleLoginItem() {
+        do {
+            if SMAppService.mainApp.status == .enabled { try SMAppService.mainApp.unregister() }
+            else { try SMAppService.mainApp.register() }
+        } catch { NSLog("Shipcat login-item configuration failed: %@", String(describing: type(of: error))) }
+    }
     @objc private func quit() { NSApp.terminate(nil) }
     private func updateView() { panel?.contentView = NSHostingView(rootView: PetView(lifecycle: lifecycle, paused: paused)) }
+}
+
+@MainActor
+private final class LifecycleNotifier {
+    private let center = UNUserNotificationCenter.current()
+    private let defaults = UserDefaults.standard
+    private let enabledKey = "lifecycleNotificationsEnabled"
+    private let seenKey = "deliveredLifecycleEventHashes"
+
+    func requestOptIn() {
+        Task {
+            let allowed = (try? await center.requestAuthorization(options: [.alert, .sound])) == true
+            defaults.set(allowed, forKey: enabledKey)
+        }
+    }
+
+    func deliver(event: LedgerEvent, home: String) {
+        guard defaults.bool(forKey: enabledKey) else { return }
+        let source = "\(home)\u{0}\(event.task)\u{0}\(event.kind.rawValue)\u{0}\(event.timestamp ?? 0)"
+        let hash = SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
+        var seen = Set(defaults.stringArray(forKey: seenKey) ?? [])
+        guard seen.insert(hash).inserted else { return }
+        defaults.set(Array(seen.suffix(500)), forKey: seenKey)
+        let content = UNMutableNotificationContent()
+        content.title = "Shipcat"
+        content.body = "A task changed lifecycle state."
+        Task { try? await center.add(UNNotificationRequest(identifier: hash, content: content, trigger: nil)) }
+    }
 }
 
 private struct PetView: View {
