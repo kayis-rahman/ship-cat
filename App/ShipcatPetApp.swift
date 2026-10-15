@@ -35,8 +35,7 @@ final class PetController: NSObject {
     private var paused = false
     private var lifecycle: Lifecycle = .idle
     private let notifier = LifecycleNotifier()
-    private var tailer: LedgerTailer?
-    private var reducer = LedgerReducer()
+    private var source = PetLifecycleSource()
     private var ledgerTimer: Timer?
 
     func show() {
@@ -102,8 +101,7 @@ final class PetController: NSObject {
         startMonitoring(url: url, home: url.deletingLastPathComponent().lastPathComponent)
     }
     private func startMonitoring(url: URL, home: String) {
-        tailer = LedgerTailer()
-        reducer = LedgerReducer()
+        source.reset()
         ledgerTimer?.invalidate()
         pollLedger(url: url, home: home)
         ledgerTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -111,11 +109,13 @@ final class PetController: NSObject {
         }
     }
     private func pollLedger(url: URL, home: String) {
-        guard let tailer else { return }
-        for event in tailer.read(url: url, home: home) where reducer.apply(event, home: home) {
-            lifecycle = event.lifecycle
-            notifier.deliver(event: event, home: home)
-        }
+        let poll = source.poll(url: url, home: home)
+        // The displayed lifecycle is the reducer's answer for the whole snapshot,
+        // never the lifecycle of the last accepted event.
+        lifecycle = poll.lifecycle
+        // Notify only when the pet's state actually moved, so a replayed dispatch
+        // or an unmappable status never posts a spurious "changed lifecycle" alert.
+        if let trigger = poll.trigger { notifier.deliver(event: trigger, home: home) }
         updateView()
     }
     @objc private func enableNotifications() { notifier.requestOptIn() }
@@ -145,7 +145,7 @@ private final class LifecycleNotifier {
 
     func deliver(event: LedgerEvent, home: String) {
         guard defaults.bool(forKey: enabledKey) else { return }
-        let source = "\(home)\u{0}\(event.task)\u{0}\(event.kind.rawValue)\u{0}\(event.timestamp ?? 0)\u{0}\(event.lifecycle.rawValue)"
+        let source = "\(home)\u{0}\(event.task)\u{0}\(event.kind.rawValue)\u{0}\(event.timestamp ?? 0)\u{0}\(event.lifecycle?.rawValue ?? "none")"
         let hash = SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
         var seen = Set(defaults.stringArray(forKey: seenKey) ?? [])
         guard seen.insert(hash).inserted else { return }
@@ -161,13 +161,25 @@ private struct PetView: View {
     let lifecycle: Lifecycle
     let paused: Bool
     @State private var bounce = false
+    /// The pet sprite. Loaded from the app bundle's Resources so the reference
+    /// survives asset-catalog resolution differences; see
+    /// App/Assets/Ember/PROVENANCE.md for provenance.
+    private static let sprite = PetSprite.load()
     var body: some View {
         ZStack {
             Circle().fill(.black.opacity(0.06)).frame(width: 118, height: 118).blur(radius: 5).offset(y: 7)
-            Image(systemName: paused ? "cat.fill" : "cat.fill")
-                .resizable().scaledToFit().foregroundStyle(color)
+            Image(nsImage: Self.sprite)
+                .resizable().scaledToFit()
+                .opacity(paused ? 0.5 : 1)
                 .frame(width: 96, height: 96).scaleEffect(bounce ? 1.03 : 0.96)
                 .animation(paused ? nil : .easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: bounce)
+                .overlay {
+                    // Lifecycle accent only: tinted by shape, never with text or
+                    // props. Mixed lightly so the artwork (green pupils, coat,
+                    // markings) stays legible.
+                    Circle().stroke(color.opacity(0.9), lineWidth: 3)
+                        .frame(width: 104, height: 104)
+                }
         }
         .frame(width: 132, height: 132)
         .background(.clear)
@@ -177,5 +189,17 @@ private struct PetView: View {
     }
     private var color: Color {
         switch lifecycle { case .working: .orange; case .attention: .pink; case .merged: .green; case .cleanedUp: .gray; default: .blue }
+    }
+}
+
+/// The Ember sprite, bundled at App/Assets/Ember/ember.png. Provenance and the
+/// exact generation settings are recorded in App/Assets/Ember/PROVENANCE.md.
+private enum PetSprite {
+    static let sprite = load()
+    static func load() -> NSImage {
+        guard let url = Bundle.main.url(forResource: "ember", withExtension: "png"),
+              let image = NSImage(contentsOf: url) else { return NSImage() }
+        image.size = NSSize(width: 512, height: 512)
+        return image
     }
 }
