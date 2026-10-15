@@ -40,6 +40,42 @@ import Testing
         #expect(poll.changed)
     }
 
+    @Test func replayedDispatchAfterAttentionFiresNoNotification() throws {
+        // The review's sequence split across batches: the re-dispatch is a later
+        // write, so it arrives in a second poll. The pet must not move and the
+        // notifier must receive no trigger for a "changed lifecycle" alert.
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        try write([#"{"v":1,"ts":1,"event":"task.status","task":"fix-login","state":"attention"}"#], to: url)
+        var source = PetLifecycleSource()
+        let first = source.poll(url: url, home: "h")
+        #expect(first.lifecycle == .attention)
+        #expect(first.changed)
+        let handle = try FileHandle(forWritingTo: url)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data((#"{"v":1,"ts":2,"event":"task.dispatched","task":"fix-login"}"# + "\n").utf8))
+        try handle.close()
+        let second = source.poll(url: url, home: "h")
+        #expect(second.lifecycle == .attention)
+        #expect(!second.changed)
+        #expect(second.trigger == nil)
+    }
+
+    @Test func triggerIsTheRecordThatMovedTheDisplay() throws {
+        // When one batch contains the status and the later re-dispatch, the
+        // notifier's trigger must be the record that actually moved the pet -
+        // the attention status - never the dispatch that moved nothing.
+        let poll = try poll([
+            #"{"v":1,"ts":1,"event":"task.status","task":"fix-login","state":"attention"}"#,
+            #"{"v":1,"ts":2,"event":"task.dispatched","task":"fix-login"}"#
+        ])
+        #expect(poll.changed)
+        #expect(poll.lifecycle == .attention)
+        #expect(poll.trigger?.kind == .status)
+        #expect(poll.trigger?.task == "fix-login")
+        #expect(poll.trigger?.lifecycle == .attention)
+    }
+
     @Test func lateWorkingForAnotherTaskDoesNotHideAttention() throws {
         // "Last accepted event wins" across unrelated tasks hid an unresolved
         // .attention.
@@ -105,6 +141,25 @@ import Testing
         #expect(poll.lifecycle == .attention)
     }
 
+    @Test func unknownStateAfterAttentionFiresNoNotification() throws {
+        // F3's sequence split across batches: the review's symptom was that the
+        // pet dropped to blue AND a "changed lifecycle state" notification was
+        // sent. Both must not happen.
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        try write([#"{"v":1,"ts":1,"event":"task.status","task":"t","state":"attention"}"#], to: url)
+        var source = PetLifecycleSource()
+        #expect(source.poll(url: url, home: "h").lifecycle == .attention)
+        let handle = try FileHandle(forWritingTo: url)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data((#"{"v":1,"ts":2,"event":"task.status","task":"t","state":"needs_input_v2"}"# + "\n").utf8))
+        try handle.close()
+        let second = source.poll(url: url, home: "h")
+        #expect(second.lifecycle == .attention)
+        #expect(!second.changed)
+        #expect(second.trigger == nil)
+    }
+
     @Test func unknownStateDoesNotNotifyAndReducerRetainsProjection() throws {
         let url = tempFile()
         defer { try? FileManager.default.removeItem(at: url) }
@@ -117,6 +172,13 @@ import Testing
         for event in tailer.read(url: url, home: "h") where reducer.apply(event, home: "h") {}
         #expect(tailer.read(url: url, home: "h").isEmpty)
         #expect(reducer.snapshot().first?.lifecycle == .attention)
+        // The source-level half of the same claim: the pet does not move and no
+        // notification trigger is produced for the unmappable record.
+        var source = PetLifecycleSource()
+        let poll = source.poll(url: url, home: "h")
+        #expect(poll.lifecycle == .attention)
+        #expect(poll.changed)
+        #expect(poll.trigger?.lifecycle == .attention)
     }
 
     @Test func unknownStateAloneKeepsIdleInsteadOfResetting() throws {

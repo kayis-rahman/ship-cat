@@ -107,12 +107,14 @@ same pixels the module emitted.
 Downscaled to the contract's 96px glance size, the silhouette (big ears, bushy
 tail, white chest and tail tip, black socks) still reads, and the green pupils
 are still visible. Measured evidence, from the app's own `--render-test` path
-(`/tmp/shipcat-pet-render.png`, 132x132 RGBA): the sprite carries 11 green
-pixels in two compact clusters either side of the muzzle, at rows 48-50 of 132 —
-one cluster 4x3 px, one 1x2 px. The pupils are small at this size by design (the
-render is a still body, not a large face), so they read as a green pair rather
-than a single green dot. No lifecycle behaviour is expressed by the artwork — see
-below.
+(`/tmp/shipcat-pet-render.png`, 132x132 RGBA, re-measured against the shipped
+sprite): with the predicate "alpha > 200 and green beats red and green beats
+blue", the render carries **14 green pixels in two compact pupil clusters
+either side of the muzzle, rows 48-50 of 132, bbox x 64-75** (left 6 px at
+x 64-65, right 8 px at x 66-75), best channel margin 39. The pupils are small
+at this size by design (the render is a still body, not a large face), so they
+read as a green pair rather than a single green dot. No lifecycle behaviour is
+expressed by the artwork — see below.
 
 ## Privacy contract
 
