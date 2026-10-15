@@ -13,6 +13,8 @@ pupils make green."**
 
 SHA-256 `ember.png`: `1eb1c514c7b925246902dadb249872fa0ecc8dc29ccd3f012dde1305f3ec9810`
 
+The Release app bundle ships this exact file: `ShipcatPet.app/Contents/Resources/ember.png` carries the same SHA-256 after `xcodebuild ... -configuration Release`, so the committed asset is what the pet renders. The app loads it through `Bundle.main.url(forResource:)` with `Image(nsImage:)`; see the privacy-contract note below for why template rendering was rejected.
+
 ## Provenance
 
 ### Source prototype (unchanged reference render)
@@ -80,7 +82,7 @@ Measured with the same silhouette/coat/eye pixel analysis on both:
 | silhouette bbox height | Δ 10 px | Δ 0 px |
 | centroid | Δ 8 px x, 5 px y | Δ 9 px x, 0 px y |
 | subject mean RGB | (155,104,77) vs (157,109,83) | (155,105,77) vs (157,109,83) |
-| green eye pixels | 0 (amber retained) | 828, mean `(111,183,8)` |
+| green eye pixels (green leads red and blue by 40+, whole render) | 0 (amber retained) | 944, mean `(101,170,6)` |
 | background mean | (187,187,186) vs (193,192,193) | (188,187,186) vs (193,192,193) |
 
 The control's residual drift is the same magnitude as the approved asset's, so
@@ -96,8 +98,9 @@ sampled from the render's border ring, then a border-seeded flood fill credits
 every reachable neutral light-grey pixel as backdrop. The cream-white chest and
 tail tip, the black socks, and the pale ground shadow are not reachable from the
 border and stay opaque. The mask is then feathered (two 3x3 box blurs plus a
-contrast curve) to 27.77% fully opaque / 3.26% partially transparent at 512x512,
-and downscaled with high-quality filtering.
+contrast curve) and downscaled with high-quality filtering. Re-measured on the
+shipped `ember.png` at 512x512: 27.74% fully opaque (72,725 px at alpha 255),
+3.28% partially transparent (8,605 px), 68.98% fully transparent (180,814 px).
 
 This is a matte, not a generated alpha channel; the colour information is the
 same pixels the module emitted.
@@ -107,14 +110,29 @@ same pixels the module emitted.
 Downscaled to the contract's 96px glance size, the silhouette (big ears, bushy
 tail, white chest and tail tip, black socks) still reads, and the green pupils
 are still visible. Measured evidence, from the app's own `--render-test` path
-(`/tmp/shipcat-pet-render.png`, 132x132 RGBA, re-measured against the shipped
-sprite): with the predicate "alpha > 200 and green beats red and green beats
-blue", the render carries **14 green pixels in two compact pupil clusters
-either side of the muzzle, rows 48-50 of 132, bbox x 64-75** (left 6 px at
-x 64-65, right 8 px at x 66-75), best channel margin 39. The pupils are small
-at this size by design (the render is a still body, not a large face), so they
-read as a green pair rather than a single green dot. No lifecycle behaviour is
-expressed by the artwork — see below.
+run against the Release build (`/tmp/shipcat-pet-render.png`, 132x132 RGBA,
+re-measured against the shipped sprite):
+
+- **Predicate:** alpha > 200, green minus red >= 5, green minus blue >= 5.
+- **Result:** **13 green pixels in two compact pupil clusters either side of the
+  muzzle, rows 48-50 of 132, bbox x 64-75** (left 10 px at x 64-67, right 3 px at
+  x 74-75), best channel margin 39. The pupils are small at this size by design
+  (the render is a still body, not a large face), so they read as a green pair
+  rather than a single green dot.
+- **The margin floor is required, not cosmetic.** A bare "green beats red and
+  green beats blue" test does not measure the pupils: it also matches the
+  anti-aliased blend of the light-grey background against the dark coat
+  lower-right of the render (x 74-83, rows 87-91), where green leads by only
+  1-3 units, and reports 24 pixels spread across rows 48-91; using `>=` instead
+  of `>` additionally matches equal-channel grey background pixels and reports
+  63. With a floor the claim is stable: floors of 5, 10 and 20 give 13, 11 and
+  8 pixels respectively, all inside the eye rows 48-50.
+- **The render is deterministic:** six consecutive `--render-test` runs
+  produced byte-identical PNGs (SHA-256
+  `c9732f648fd1970c93b550f27e34944036a625b1e5a52ed70b8ba707523b8a98`,
+  15,958 bytes), so the measurement above reproduces run to run.
+
+No lifecycle behaviour is expressed by the artwork — see below.
 
 ## Privacy contract
 
