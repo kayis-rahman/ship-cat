@@ -106,17 +106,28 @@ same pixels the module emitted.
 
 Downscaled to the contract's 96px glance size, the silhouette (big ears, bushy
 tail, white chest and tail tip, black socks) still reads, and the green pupils
-are still visible. No lifecycle behaviour is expressed by the artwork — see
+are still visible. Measured evidence, from the app's own `--render-test` path
+(`/tmp/shipcat-pet-render.png`, 132x132 RGBA): the sprite carries 11 green
+pixels in two compact clusters either side of the muzzle, at rows 48-50 of 132 —
+one cluster 4x3 px, one 1x2 px. The pupils are small at this size by design (the
+render is a still body, not a large face), so they read as a green pair rather
+than a single green dot. No lifecycle behaviour is expressed by the artwork — see
 below.
 
 ## Privacy contract
 
 The app's lifecycle-only contract is unchanged and the asset preserves it:
 
-- Lifecycle is expressed through **shape, accent or tint only**. The sprite is
-  drawn in `PetView` and tinted by the current lifecycle via `foregroundStyle`.
+- Lifecycle is expressed through **shape, accent or tint only**. In `PetView`
+  (`App/ShipcatPetApp.swift`) it is carried by a translucent accent ring drawn
+  over the sprite plus the pause dimming. The artwork itself is never tinted:
+  making the sprite a template (`NSImage.isTemplate` + `foregroundStyle`)
+  flattened it into a solid silhouette and erased the green pupils, so it was
+  rejected and the accent is layered instead.
 - **No task text, no props, no collar, no clothing, and no text or UI** appear in
   the artwork; the negative prompt above enforces that.
 - Accessibility labels are separate from the artwork and stay in
   `ShipcatPetApp.swift` (`"Shipcat pet, <state>"`), never derived from the
   artwork.
+- `Tests/ShipcatCoreTests/EmberAssetTests.swift` locks this asset down: it fails
+  if the sprite loses its green pupils or its transparent background.
