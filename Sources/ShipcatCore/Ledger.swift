@@ -14,20 +14,24 @@ public enum Lifecycle: String, Sendable {
 
 /// A privacy-safe projection of a canonical Firstmate v1 record.
 /// Deliberately has no property capable of holding task text or status text.
+///
+/// `lifecycle` is nil when the record carries no lifecycle the contract can map
+/// (an absent or unrecognised `state` on a `task.status`). Such a record is
+/// ignored by the reducer: it must never reset an already-established state.
 public struct LedgerEvent: Equatable, Sendable {
     public let kind: LedgerEventKind
     public let task: String
-    public let lifecycle: Lifecycle
+    public let lifecycle: Lifecycle?
     public let timestamp: Int64?
 
     public init?(data: Data) {
         guard let object = try? JSONSerialization.jsonObject(with: data),
-              let record = object as? [String: Any],
-              (record["v"] as? Int) == 1,
-              let eventName = record["event"] as? String,
-              let kind = LedgerEventKind(rawValue: eventName),
-              let task = record["task"] as? String, !task.isEmpty else { return nil }
-        let lifecycle: Lifecycle
+               let record = object as? [String: Any],
+               (record["v"] as? Int) == 1,
+               let eventName = record["event"] as? String,
+               let kind = LedgerEventKind(rawValue: eventName),
+               let task = record["task"] as? String, !task.isEmpty else { return nil }
+        let lifecycle: Lifecycle?
         switch kind {
         case .dispatched: lifecycle = .working
         case .status:
@@ -38,7 +42,7 @@ public struct LedgerEvent: Equatable, Sendable {
             case "paused": lifecycle = .paused
             case "merged": lifecycle = .merged
             case "cleaned_up", "cleaned-up": lifecycle = .cleanedUp
-            default: lifecycle = .idle
+            default: lifecycle = nil
             }
         case .prReady: lifecycle = .attention
         case .merged: lifecycle = .merged

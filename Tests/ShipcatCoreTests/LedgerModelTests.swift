@@ -23,7 +23,7 @@ import Testing
         let secret = "PRIVATE-STATUS-SECRET-91a"
         let json = #"{"v":1,"event":"task.status","task":"safe-id","state":"working","key":"private-key","text":"\#(secret)"}"#
         let event = LedgerEvent(data: Data(json.utf8))!
-        let projection = TaskProjection(identity: TaskIdentity(home: "demo", task: event.task), lifecycle: event.lifecycle)
+        let projection = TaskProjection(identity: TaskIdentity(home: "demo", task: event.task), lifecycle: event.lifecycle ?? .idle)
         let output = String(describing: projection) + " " + String(describing: event)
         #expect(!output.contains(secret))
         #expect(!String(describing: type(of: event)).contains("text"))
