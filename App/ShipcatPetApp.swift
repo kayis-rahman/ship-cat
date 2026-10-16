@@ -264,6 +264,34 @@ private struct PetView: View {
     }
 }
 
+private final class InboxCommandOutput: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data = Data()
+    private var error: Error?
+
+    func append(_ chunk: Data) {
+        lock.lock()
+        if data.count + chunk.count > InboxReceiptsReader.maximumBytes {
+            error = InboxReceiptsError.tooLarge
+        } else {
+            data.append(chunk)
+        }
+        lock.unlock()
+    }
+
+    func fail(_ error: Error) {
+        lock.lock()
+        self.error = error
+        lock.unlock()
+    }
+
+    func result() -> (Data, Error?) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (data, error)
+    }
+}
+
 private enum InboxReceiptsCommand {
     static func read(command: URL) throws -> Data {
         let process = Process()
@@ -275,34 +303,38 @@ private enum InboxReceiptsCommand {
         process.standardError = FileHandle.nullDevice
         try process.run()
 
-        let timeoutLock = NSLock()
-        var timedOut = false
-        let timeout = DispatchWorkItem {
-            guard process.isRunning else { return }
-            timeoutLock.lock()
-            timedOut = true
-            timeoutLock.unlock()
-            process.terminate()
-        }
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 15, execute: timeout)
-        defer { timeout.cancel() }
-
-        var data = Data()
-        while true {
-            let chunk = try output.fileHandleForReading.read(upToCount: 64 * 1024) ?? Data()
-            if chunk.isEmpty { break }
-            guard data.count + chunk.count <= InboxReceiptsReader.maximumBytes else {
-                process.terminate()
-                process.waitUntilExit()
-                throw InboxReceiptsError.tooLarge
+        let reader = output.fileHandleForReading
+        let finished = DispatchSemaphore(value: 0)
+        let capturedOutput = InboxCommandOutput()
+        reader.readabilityHandler = { handle in
+            do {
+                let chunk = try handle.read(upToCount: 64 * 1024) ?? Data()
+                if chunk.isEmpty {
+                    handle.readabilityHandler = nil
+                    finished.signal()
+                } else {
+                    capturedOutput.append(chunk)
+                    if capturedOutput.result().1 != nil {
+                        handle.readabilityHandler = nil
+                        finished.signal()
+                    }
+                }
+            } catch {
+                capturedOutput.fail(error)
+                handle.readabilityHandler = nil
+                finished.signal()
             }
-            data.append(chunk)
+        }
+
+        guard finished.wait(timeout: .now() + 15) == .success else {
+            reader.readabilityHandler = nil
+            try? reader.close()
+            if process.isRunning { process.terminate() }
+            throw InboxReceiptsError.malformed
         }
         process.waitUntilExit()
-        timeoutLock.lock()
-        let didTimeOut = timedOut
-        timeoutLock.unlock()
-        guard !didTimeOut else { throw InboxReceiptsError.malformed }
+        let (data, error) = capturedOutput.result()
+        if let error { throw error }
         guard process.terminationStatus == 0 else { throw InboxReceiptsError.malformed }
         return data
     }
