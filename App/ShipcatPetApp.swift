@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import CryptoKit
 import ServiceManagement
 import SwiftUI
@@ -269,14 +270,15 @@ private final class InboxCommandOutput: @unchecked Sendable {
     private var data = Data()
     private var error: Error?
 
-    func append(_ chunk: Data) {
+    func append(_ chunk: Data) -> Bool {
         lock.lock()
-        if data.count + chunk.count > InboxReceiptsReader.maximumBytes {
+        defer { lock.unlock() }
+        guard data.count + chunk.count <= InboxReceiptsReader.maximumBytes else {
             error = InboxReceiptsError.tooLarge
-        } else {
-            data.append(chunk)
+            return false
         }
-        lock.unlock()
+        data.append(chunk)
+        return true
     }
 
     func fail(_ error: Error) {
@@ -292,17 +294,45 @@ private final class InboxCommandOutput: @unchecked Sendable {
     }
 }
 
+private extension Array where Element == String {
+    func withCStringArray<Result>(_ body: (UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>) -> Result) -> Result {
+        let pointers: [UnsafeMutablePointer<CChar>?] = map { strdup($0) }
+        defer { pointers.forEach { if let pointer = $0 { free(pointer) } } }
+        var argv = pointers
+        argv.append(nil)
+        return argv.withUnsafeMutableBufferPointer { body($0.baseAddress!) }
+    }
+}
+
 private enum InboxReceiptsCommand {
     static func read(command: URL) throws -> Data {
-        let process = Process()
         let output = Pipe()
-        process.executableURL = command
-        process.arguments = ["receipts", "--all-pending", "--all-handled"]
-        process.environment = ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"]
-        process.standardOutput = output
-        process.standardError = FileHandle.nullDevice
-        try process.run()
-        _ = setpgid(process.processIdentifier, process.processIdentifier)
+        var actions: posix_spawn_file_actions_t?
+        var attributes: posix_spawnattr_t?
+        guard posix_spawn_file_actions_init(&actions) == 0,
+              posix_spawnattr_init(&attributes) == 0 else { throw InboxReceiptsError.malformed }
+        defer {
+            posix_spawn_file_actions_destroy(&actions)
+            posix_spawnattr_destroy(&attributes)
+        }
+        let nullDescriptor = open("/dev/null", O_WRONLY)
+        guard nullDescriptor >= 0 else { throw InboxReceiptsError.malformed }
+        defer { close(nullDescriptor) }
+        guard posix_spawn_file_actions_adddup2(&actions, output.fileHandleForWriting.fileDescriptor, STDOUT_FILENO) == 0,
+              posix_spawn_file_actions_adddup2(&actions, nullDescriptor, STDERR_FILENO) == 0,
+              posix_spawn_file_actions_addclose(&actions, output.fileHandleForReading.fileDescriptor) == 0,
+              posix_spawn_file_actions_addclose(&actions, output.fileHandleForWriting.fileDescriptor) == 0,
+              posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP)) == 0,
+              posix_spawnattr_setpgroup(&attributes, 0) == 0 else { throw InboxReceiptsError.malformed }
+
+        let arguments = [command.path, "receipts", "--all-pending", "--all-handled"]
+        var pid = pid_t()
+        let spawnResult = arguments.withCStringArray { argv in
+            posix_spawn(&pid, command.path, &actions, &attributes, argv, environ)
+        }
+        guard spawnResult == 0 else { throw InboxReceiptsError.malformed }
+        let spawnedPID = pid
+        try? output.fileHandleForWriting.close()
 
         let reader = output.fileHandleForReading
         let finished = DispatchSemaphore(value: 0)
@@ -314,8 +344,8 @@ private enum InboxReceiptsCommand {
                     handle.readabilityHandler = nil
                     finished.signal()
                 } else {
-                    capturedOutput.append(chunk)
-                    if capturedOutput.result().1 != nil {
+                    if !capturedOutput.append(chunk) {
+                        _ = kill(-spawnedPID, SIGKILL)
                         handle.readabilityHandler = nil
                         finished.signal()
                     }
@@ -330,14 +360,15 @@ private enum InboxReceiptsCommand {
         guard finished.wait(timeout: .now() + 15) == .success else {
             reader.readabilityHandler = nil
             try? reader.close()
-            _ = kill(-process.processIdentifier, SIGKILL)
-            if process.isRunning { process.terminate() }
+            _ = kill(-spawnedPID, SIGKILL)
+            _ = waitpid(spawnedPID, nil, 0)
             throw InboxReceiptsError.malformed
         }
-        process.waitUntilExit()
+        var status: Int32 = 0
+        guard waitpid(spawnedPID, &status, 0) == spawnedPID else { throw InboxReceiptsError.malformed }
         let (data, error) = capturedOutput.result()
         if let error { throw error }
-        guard process.terminationStatus == 0 else { throw InboxReceiptsError.malformed }
+        guard status & 0x7f == 0, (status >> 8) & 0xff == 0 else { throw InboxReceiptsError.malformed }
         return data
     }
 }
