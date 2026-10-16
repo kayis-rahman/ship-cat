@@ -6,6 +6,14 @@ Shipcat is one native SwiftUI and AppKit application. It presents a floating des
 
 The pet communicates lifecycle state only. Task names, summaries, status text, decision keys, and other ledger content never appear in the pet UI, notifications, accessibility labels, or logs. Notifications are opt-in and never repeat. Login at launch is controlled through `SMAppService`.
 
+## Discord unread indicator
+
+The optional Discord indicator is a read-only consumer of one explicitly selected Firstmate `fm-inbox.sh` command. Shipcat runs only that executable with the fixed arguments `receipts --all-pending --all-handled`, clears its inherited environment, and bounds stdout to 1 MiB. Refreshes occur every five seconds while the app is running. The user must select the command; Shipcat does not discover Firstmate paths or read `.env`, Discord spool files, tokens, or other state files.
+
+The adapter accepts only `fm-inbox-receipts.v1`, rejects malformed, oversized, or omitted/truncated receipts as **Unknown**, and counts pending `discord-*` request IDs that are not acknowledged. It projects only the receipt `source` as sender and `at` as time. Message bodies and all other receipt content are not retained or displayed. The status-item count and existing pet accent ring react to unread receipts; the menu may list sender, time, and unread state only. No open, refresh, or UI action acknowledges a message. Handling remains exclusively in Firstmate's normal inbox flow. Shipcat never writes to the command, inbox, or receipts. Discord arrival does not use macOS system notifications; existing lifecycle notifications remain explicitly opt-in.
+
+This is a deliberately narrow read surface, not an OS-enforced filesystem sandbox. Direct distribution runs as the logged-in user, so selecting a command does not itself enforce a file-level ACL. The command must be a trusted `fm-inbox.sh` path supplied by the user. A valid empty receipt list displays zero; any uncertainty displays Unknown rather than a guessed count.
+
 ## Interaction and prototype acceptance
 
 - A borderless, transparent, floating pet window stays above ordinary app windows and does not activate the app when shown.
@@ -17,7 +25,7 @@ The pet communicates lifecycle state only. Task names, summaries, status text, d
 
 ## Data boundary
 
-Consume only explicitly supplied ledger paths. Process canonical Firstmate v1 JSONL records read-only and only as complete lines. Support `task.dispatched`, `task.status`, `task.pr_ready`, `task.merged`, and `task.cleaned_up`; ignore unknown events. Scope task identity by home plus task ID. No network and no writes to Firstmate state.
+Consume only explicitly supplied ledger paths. Process canonical Firstmate v1 JSONL records read-only and only as complete lines. Support `task.dispatched`, `task.status`, `task.pr_ready`, `task.merged`, and `task.cleaned_up`; ignore unknown events. Scope task identity by home plus task ID. The optional Discord indicator uses only the separately selected, bounded receipts command described above. No network and no writes to Firstmate state.
 
 ### Lifecycle is a derived property
 
