@@ -40,6 +40,7 @@ final class PetController: NSObject {
     private var inboxTimer: Timer?
     private var unreadSnapshot: DiscordUnreadSnapshot?
     private var inboxPolling = false
+    private var activeInboxCommand: URL?
     private let inboxCommandKey = "discordInboxReceiptsCommand"
     private var inboxStatusItem: NSMenuItem?
 
@@ -142,6 +143,7 @@ final class PetController: NSObject {
         startMonitoringInbox(command: url)
     }
     private func startMonitoringInbox(command: URL) {
+        activeInboxCommand = command
         inboxTimer?.invalidate()
         pollInbox(command: command)
         inboxTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
@@ -149,7 +151,7 @@ final class PetController: NSObject {
         }
     }
     private func pollInbox(command: URL) {
-        guard !inboxPolling else { return }
+        guard command == activeInboxCommand, !inboxPolling else { return }
         inboxPolling = true
         let read = Task.detached(priority: .utility) { () -> DiscordUnreadSnapshot? in
             do { return try InboxReceiptsReader.parse(InboxReceiptsCommand.read(command: command)) }
@@ -157,10 +159,15 @@ final class PetController: NSObject {
         }
         Task { @MainActor [weak self] in
             guard let self else { return }
-            self.unreadSnapshot = await read.value
+            let snapshot = await read.value
             self.inboxPolling = false
-            self.updateInboxIndicator()
-            self.updateView()
+            if command == self.activeInboxCommand {
+                self.unreadSnapshot = snapshot
+                self.updateInboxIndicator()
+                self.updateView()
+            } else if let activeCommand = self.activeInboxCommand {
+                self.pollInbox(command: activeCommand)
+            }
         }
     }
     private func updateInboxIndicator() {
@@ -268,6 +275,18 @@ private enum InboxReceiptsCommand {
         process.standardError = FileHandle.nullDevice
         try process.run()
 
+        let timeoutLock = NSLock()
+        var timedOut = false
+        let timeout = DispatchWorkItem {
+            guard process.isRunning else { return }
+            timeoutLock.lock()
+            timedOut = true
+            timeoutLock.unlock()
+            process.terminate()
+        }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 15, execute: timeout)
+        defer { timeout.cancel() }
+
         var data = Data()
         while true {
             let chunk = try output.fileHandleForReading.read(upToCount: 64 * 1024) ?? Data()
@@ -280,6 +299,10 @@ private enum InboxReceiptsCommand {
             data.append(chunk)
         }
         process.waitUntilExit()
+        timeoutLock.lock()
+        let didTimeOut = timedOut
+        timeoutLock.unlock()
+        guard !didTimeOut else { throw InboxReceiptsError.malformed }
         guard process.terminationStatus == 0 else { throw InboxReceiptsError.malformed }
         return data
     }
