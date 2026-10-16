@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import CryptoKit
 import ServiceManagement
 import SwiftUI
@@ -37,6 +38,12 @@ final class PetController: NSObject {
     private let notifier = LifecycleNotifier()
     private var source = PetLifecycleSource()
     private var ledgerTimer: Timer?
+    private var inboxTimer: Timer?
+    private var unreadSnapshot: DiscordUnreadSnapshot?
+    private var inboxPolling = false
+    private var activeInboxCommand: URL?
+    private let inboxCommandKey = "discordInboxReceiptsCommand"
+    private var inboxStatusItem: NSMenuItem?
 
     func show() {
         if panel == nil {
@@ -81,12 +88,20 @@ final class PetController: NSObject {
         menu.addItem(NSMenuItem(title: "Hide Pet", action: #selector(hidePet), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Pause / Resume", action: #selector(pausePet), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Choose Fleet Ledger…", action: #selector(chooseLedger), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Choose Discord Inbox Command…", action: #selector(chooseInboxCommand), keyEquivalent: ""))
+        let inboxStatus = NSMenuItem(title: "Discord unread: Unknown", action: nil, keyEquivalent: "")
+        inboxStatus.isEnabled = false
+        menu.addItem(inboxStatus)
+        inboxStatusItem = inboxStatus
         menu.addItem(NSMenuItem(title: "Enable Lifecycle Notifications…", action: #selector(enableNotifications), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Start at Login", action: #selector(toggleLoginItem), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Shipcat", action: #selector(quit), keyEquivalent: "q"))
         for item in menu.items { item.target = self }
         statusItem.menu = menu
+        if let path = UserDefaults.standard.string(forKey: inboxCommandKey) {
+            startMonitoringInbox(command: URL(fileURLWithPath: path))
+        }
     }
     @objc private func showPet() { show() }
     @objc private func hidePet() { hide() }
@@ -118,6 +133,63 @@ final class PetController: NSObject {
         if let trigger = poll.trigger { notifier.deliver(event: trigger, home: home) }
         updateView()
     }
+    @objc private func chooseInboxCommand() {
+        let picker = NSOpenPanel()
+        picker.allowedContentTypes = [.shellScript, .unixExecutable]
+        picker.allowsOtherFileTypes = true
+        picker.canChooseDirectories = false
+        picker.canChooseFiles = true
+        guard picker.runModal() == .OK, let url = picker.url else { return }
+        UserDefaults.standard.set(url.path, forKey: inboxCommandKey)
+        startMonitoringInbox(command: url)
+    }
+    private func startMonitoringInbox(command: URL) {
+        activeInboxCommand = command
+        inboxTimer?.invalidate()
+        pollInbox(command: command)
+        inboxTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.pollInbox(command: command) }
+        }
+    }
+    private func pollInbox(command: URL) {
+        guard command == activeInboxCommand, !inboxPolling else { return }
+        inboxPolling = true
+        let read = Task.detached(priority: .utility) { () -> DiscordUnreadSnapshot? in
+            do { return try InboxReceiptsReader.parse(InboxReceiptsCommand.read(command: command)) }
+            catch { return nil }
+        }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let snapshot = await read.value
+            self.inboxPolling = false
+            if command == self.activeInboxCommand {
+                self.unreadSnapshot = snapshot
+                self.updateInboxIndicator()
+                self.updateView()
+            } else if let activeCommand = self.activeInboxCommand {
+                self.pollInbox(command: activeCommand)
+            }
+        }
+    }
+    private func updateInboxIndicator() {
+        guard let button = statusItem?.button else { return }
+        if let snapshot = unreadSnapshot {
+            button.title = snapshot.count > 0 ? "🐈 \(snapshot.count)" : "🐈"
+            inboxStatusItem?.title = "Discord unread: \(snapshot.count)"
+        } else {
+            button.title = "🐈 ?"
+            inboxStatusItem?.title = "Discord unread: Unknown"
+        }
+        statusItem?.menu?.items.removeAll(where: { $0.tag == 707 })
+        guard let snapshot = unreadSnapshot, let menu = statusItem?.menu, snapshot.count > 0,
+              let statusItem = inboxStatusItem, let index = menu.items.firstIndex(of: statusItem) else { return }
+        for message in snapshot.messages {
+            let row = NSMenuItem(title: "\(message.sender) · \(message.time) · Unread", action: nil, keyEquivalent: "")
+            row.isEnabled = false
+            row.tag = 707
+            menu.insertItem(row, at: index + 1 + menu.items.filter { $0.tag == 707 }.count)
+        }
+    }
     @objc private func enableNotifications() { notifier.requestOptIn() }
     @objc private func toggleLoginItem() {
         do {
@@ -126,7 +198,7 @@ final class PetController: NSObject {
         } catch { NSLog("Shipcat login-item configuration failed: %@", String(describing: type(of: error))) }
     }
     @objc private func quit() { NSApp.terminate(nil) }
-    private func updateView() { panel?.contentView = NSHostingView(rootView: PetView(lifecycle: lifecycle, paused: paused)) }
+    private func updateView() { panel?.contentView = NSHostingView(rootView: PetView(lifecycle: lifecycle, paused: paused, unreadCount: unreadSnapshot?.count)) }
 }
 
 @MainActor
@@ -160,6 +232,7 @@ private final class LifecycleNotifier {
 private struct PetView: View {
     let lifecycle: Lifecycle
     let paused: Bool
+    var unreadCount: Int? = nil
     @State private var bounce = false
     /// The pet sprite. Loaded from the app bundle's Resources so the reference
     /// survives asset-catalog resolution differences; see
@@ -177,7 +250,7 @@ private struct PetView: View {
                     // Lifecycle accent only: tinted by shape, never with text or
                     // props. Mixed lightly so the artwork (green pupils, coat,
                     // markings) stays legible.
-                    Circle().stroke(color.opacity(0.9), lineWidth: 3)
+                    Circle().stroke((unreadCount.map { $0 > 0 } == true ? Color.pink : color).opacity(0.9), lineWidth: 3)
                         .frame(width: 104, height: 104)
                 }
         }
@@ -189,6 +262,117 @@ private struct PetView: View {
     }
     private var color: Color {
         switch lifecycle { case .working: .orange; case .attention: .pink; case .merged: .green; case .cleanedUp: .gray; default: .blue }
+    }
+}
+
+private final class InboxCommandOutput: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data = Data()
+    private var error: Error?
+
+    func append(_ chunk: Data) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard data.count + chunk.count <= InboxReceiptsReader.maximumBytes else {
+            error = InboxReceiptsError.tooLarge
+            return false
+        }
+        data.append(chunk)
+        return true
+    }
+
+    func fail(_ error: Error) {
+        lock.lock()
+        self.error = error
+        lock.unlock()
+    }
+
+    func result() -> (Data, Error?) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (data, error)
+    }
+}
+
+private extension Array where Element == String {
+    func withCStringArray<Result>(_ body: (UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>) -> Result) -> Result {
+        let pointers: [UnsafeMutablePointer<CChar>?] = map { strdup($0) }
+        defer { pointers.forEach { if let pointer = $0 { free(pointer) } } }
+        var argv = pointers
+        argv.append(nil)
+        return argv.withUnsafeMutableBufferPointer { body($0.baseAddress!) }
+    }
+}
+
+private enum InboxReceiptsCommand {
+    static func read(command: URL) throws -> Data {
+        let output = Pipe()
+        var actions: posix_spawn_file_actions_t?
+        var attributes: posix_spawnattr_t?
+        guard posix_spawn_file_actions_init(&actions) == 0,
+              posix_spawnattr_init(&attributes) == 0 else { throw InboxReceiptsError.malformed }
+        defer {
+            posix_spawn_file_actions_destroy(&actions)
+            posix_spawnattr_destroy(&attributes)
+        }
+        let nullDescriptor = open("/dev/null", O_WRONLY)
+        guard nullDescriptor >= 0 else { throw InboxReceiptsError.malformed }
+        defer { close(nullDescriptor) }
+        guard posix_spawn_file_actions_adddup2(&actions, output.fileHandleForWriting.fileDescriptor, STDOUT_FILENO) == 0,
+              posix_spawn_file_actions_adddup2(&actions, nullDescriptor, STDERR_FILENO) == 0,
+              posix_spawn_file_actions_addclose(&actions, output.fileHandleForReading.fileDescriptor) == 0,
+              posix_spawn_file_actions_addclose(&actions, output.fileHandleForWriting.fileDescriptor) == 0,
+              posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP)) == 0,
+              posix_spawnattr_setpgroup(&attributes, 0) == 0 else { throw InboxReceiptsError.malformed }
+
+        let arguments = [command.path, "receipts", "--all-pending", "--all-handled"]
+        let environment = ["PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"]
+        var pid = pid_t()
+        let spawnResult = arguments.withCStringArray { argv in
+            environment.withCStringArray { envp in
+                posix_spawn(&pid, command.path, &actions, &attributes, argv, envp)
+            }
+        }
+        guard spawnResult == 0 else { throw InboxReceiptsError.malformed }
+        let spawnedPID = pid
+        try? output.fileHandleForWriting.close()
+
+        let reader = output.fileHandleForReading
+        let finished = DispatchSemaphore(value: 0)
+        let capturedOutput = InboxCommandOutput()
+        reader.readabilityHandler = { handle in
+            do {
+                let chunk = try handle.read(upToCount: 64 * 1024) ?? Data()
+                if chunk.isEmpty {
+                    handle.readabilityHandler = nil
+                    finished.signal()
+                } else {
+                    if !capturedOutput.append(chunk) {
+                        _ = kill(-spawnedPID, SIGKILL)
+                        handle.readabilityHandler = nil
+                        finished.signal()
+                    }
+                }
+            } catch {
+                capturedOutput.fail(error)
+                handle.readabilityHandler = nil
+                finished.signal()
+            }
+        }
+
+        guard finished.wait(timeout: .now() + 15) == .success else {
+            reader.readabilityHandler = nil
+            try? reader.close()
+            _ = kill(-spawnedPID, SIGKILL)
+            _ = waitpid(spawnedPID, nil, 0)
+            throw InboxReceiptsError.malformed
+        }
+        var status: Int32 = 0
+        guard waitpid(spawnedPID, &status, 0) == spawnedPID else { throw InboxReceiptsError.malformed }
+        let (data, error) = capturedOutput.result()
+        if let error { throw error }
+        guard status & 0x7f == 0, (status >> 8) & 0xff == 0 else { throw InboxReceiptsError.malformed }
+        return data
     }
 }
 
