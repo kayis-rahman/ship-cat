@@ -10,7 +10,7 @@ The current milestones supersede the historical adapter plan. Native app accepta
 - **M3 complete:** SwiftUI/AppKit floating pet and menu bar controls, lifecycle animation, accessibility labels, and a launch-time window-property/PNG render assertion.
 - **M4 implemented:** opt-in, non-repeating lifecycle notification flow and `SMAppService` login control. User permission and login-item behavior still need live GUI verification.
 - **M5 complete:** Xcode app project, macOS 14 deployment target, hardened-runtime/non-sandbox entitlements, Developer ID DMG/notarization/staple script. Dry-run only; no Apple credentials or release operations used.
-- **M6 complete:** native docs and legacy-JS parity checklist/archive note. Parity checklist verified complete; JS source/history retained pending the captain's archive-disposition decision.
+- **M6 complete:** native docs and legacy-JS archive note; see the [archive note](archive/legacy-js-bridge.md) for parity and disposition.
 
 ## Historical Clawd adapter milestones
 
