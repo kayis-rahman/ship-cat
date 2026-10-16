@@ -3,8 +3,8 @@ import Testing
 @testable import ShipcatCore
 
 @Suite struct InboxReceiptsTests {
-    private func receipts(pending: String, omitted: String = "[]") -> Data {
-        Data(#"{"schema":"fm-inbox-receipts.v1","pending":[\#(pending)],"omitted":\#(omitted)}"#.utf8)
+    private func receipts(pending: String, handled: String = "[]", omitted: String = "[]") -> Data {
+        Data(#"{"schema":"fm-inbox-receipts.v1","pending":[\#(pending)],"handled":[\#(handled)],"omitted":\#(omitted)}"#.utf8)
     }
 
     @Test func projectsOnlyUnreadDiscordSenderAndTime() throws {
@@ -19,6 +19,16 @@ import Testing
     @Test func excludesHandledAndNonDiscordReceipts() throws {
         let data = receipts(pending: #"{"request_id":"discord-read","acknowledged":true,"source":"captain","at":"now"},{"request_id":"other-1","acknowledged":false,"source":"operator","at":"now"},{"source":"operator","at":"now"}"#)
         #expect(try InboxReceiptsReader.parse(data).count == 0)
+    }
+
+    @Test func handledArrayDoesNotContributeToUnreadCount() throws {
+        let data = receipts(
+            pending: #"{"request_id":"discord-unread","acknowledged":false,"source":"captain","at":"now"}"#,
+            handled: #"{"request_id":"discord-handled","acknowledged":true,"source":"captain","at":"earlier"}"#
+        )
+        let snapshot = try InboxReceiptsReader.parse(data)
+        #expect(snapshot.count == 1)
+        #expect(snapshot.messages == [DiscordUnreadMessage(sender: "captain", time: "now")])
     }
 
     @Test func validEmptyReceiptsAreKnownZero() throws {

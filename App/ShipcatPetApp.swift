@@ -326,9 +326,12 @@ private enum InboxReceiptsCommand {
               posix_spawnattr_setpgroup(&attributes, 0) == 0 else { throw InboxReceiptsError.malformed }
 
         let arguments = [command.path, "receipts", "--all-pending", "--all-handled"]
+        let environment = ["PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"]
         var pid = pid_t()
         let spawnResult = arguments.withCStringArray { argv in
-            posix_spawn(&pid, command.path, &actions, &attributes, argv, environ)
+            environment.withCStringArray { envp in
+                posix_spawn(&pid, command.path, &actions, &attributes, argv, envp)
+            }
         }
         guard spawnResult == 0 else { throw InboxReceiptsError.malformed }
         let spawnedPID = pid
