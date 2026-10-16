@@ -25,4 +25,4 @@ Shipcat uses direct Developer ID distribution, not the Mac App Store. See [distr
 - [Archived Path A charter](docs/archive/legacy-path-a-charter.md)
 - [Legacy JS bridge archive and parity checklist](docs/archive/legacy-js-bridge.md)
 
-The old JavaScript CLI, Clawd sink, LaunchAgent generator, and nudges remain in the repository as reference only. The parity checklist is not yet complete; no JS history or source tree has been deleted. The historical Clawd M0 was not passed.
+The old JavaScript CLI, Clawd sink, LaunchAgent generator, and nudges remain in the repository as reference only. The parity checklist in the archive note is verified complete; the JS tree and its history remain until the captain approves the archive disposition. The historical Clawd M0 was not passed.

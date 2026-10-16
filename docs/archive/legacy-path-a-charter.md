@@ -1,6 +1,6 @@
 # Archived charter: Path A Clawd adapter
 
-This file preserves the superseded product direction for historical reference. It is not the current Shipcat product contract. The captain replaced it with a native macOS pet app; the old work remains in the JavaScript tree until a parity checklist passes.
+This file preserves the superseded product direction for historical reference. It is not the current Shipcat product contract. The captain replaced it with a native macOS pet app; the old work remains in the JavaScript tree, and the parity checklist in [legacy-js-bridge.md](legacy-js-bridge.md) is complete.
 
 ## Historical scope
 
@@ -12,4 +12,4 @@ The original Clawd M0 required live route/registration/state verification, a usa
 
 ## Disposition
 
-Retain the JavaScript implementation and its history as migration reference until native parity checks are complete. Do not delete it as part of this archive. The current native product contract is in `docs/native-app-contract.md`.
+The JavaScript implementation and its history are retained as migration reference. Native parity is complete as recorded in [legacy-js-bridge.md](legacy-js-bridge.md); do not delete the tree as part of this archive. Deletion and the `legacy-js-bridge-v1` tag require the captain's archive-disposition approval. The current native product contract is in `docs/native-app-contract.md`.

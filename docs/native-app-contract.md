@@ -40,4 +40,4 @@ Direct Developer ID distribution, not the Mac App Store: sandbox disabled, harde
 
 ## Historical scope
 
-The superseded Path A charter is retained in [archive](archive/legacy-path-a-charter.md). Its Clawd M0 was not passed. The legacy JS tree remains reference until the parity checklist passes; no history is deleted.
+The superseded Path A charter is retained in [archive](archive/legacy-path-a-charter.md). Its Clawd M0 was not passed. The legacy JS tree remains reference; the parity checklist is complete, and the tree and its history remain until the captain approves the archive disposition.
