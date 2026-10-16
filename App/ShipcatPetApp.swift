@@ -302,6 +302,7 @@ private enum InboxReceiptsCommand {
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice
         try process.run()
+        _ = setpgid(process.processIdentifier, process.processIdentifier)
 
         let reader = output.fileHandleForReading
         let finished = DispatchSemaphore(value: 0)
@@ -329,6 +330,7 @@ private enum InboxReceiptsCommand {
         guard finished.wait(timeout: .now() + 15) == .success else {
             reader.readabilityHandler = nil
             try? reader.close()
+            _ = kill(-process.processIdentifier, SIGKILL)
             if process.isRunning { process.terminate() }
             throw InboxReceiptsError.malformed
         }
