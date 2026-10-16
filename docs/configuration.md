@@ -1,6 +1,8 @@
-# Configuration reference
+# Legacy JavaScript CLI configuration reference
 
-Shipcat has no runtime dependencies and reads the ledger read-only. Pass all paths and identities explicitly; it does not discover or write Firstmate state.
+This reference documents the retired legacy JavaScript CLI (`src/cli.js`), retained in `src/`, `test/`, and `scripts/` as migration reference per [the archive note](archive/legacy-js-bridge.md). The current native app takes none of these options: it has no Clawd endpoint, agent ID, nudge, or service configuration; it selects the ledger through its menu bar, and its only command-line argument is `--render-test`.
+
+The legacy package has no runtime dependencies and reads the ledger read-only. Pass all paths and identities explicitly; it does not discover or write Firstmate state.
 
 ## Ledger options
 
