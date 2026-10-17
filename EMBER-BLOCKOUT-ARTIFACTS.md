@@ -4,4 +4,4 @@ The reproducible Blender script, `.blend`, GLB export, rendered transparent PNG 
 
 `/Users/kayisrahman/.treehouse/firstmate-b8697d/9/firstmate/data/shipcat-fox-ember-3d-blockout-v1/`
 
-See that directory's README for fidelity, rig limitations, frame counts, and SceneKit test status. This is an intentionally primitive-based pipeline proof, not a production character.
+See that directory's `report.md` for artifact paths, fidelity and rig limitations, and the SceneKit GLB load attempt and error; its README summarizes the output. This is an intentionally primitive-based pipeline proof, not a production character.
