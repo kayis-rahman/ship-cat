@@ -1,7 +1,8 @@
 import { createServer } from 'node:http';
-import { readFile, writeFile, mkdir, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rm, rename } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { isIP } from 'node:net';
 
 const eventTypes = new Set(['discord.message.text', 'discord.interaction', 'discord.voice', 'discord.reaction']);
 export function validateEvent(event) {
@@ -33,8 +34,34 @@ export class EventQueue {
   async acknowledge(ids) { for (const id of ids) this.#events.delete(id); await this.#save(); }
 }
 
-export function createBridgeServer({ queue, token, host = '127.0.0.1' }) {
-  if (!token || Buffer.byteLength(token) < 32) throw new Error('a 32-byte private-network token is required');
+function normalizedAddress(address) {
+  return address.startsWith('[') && address.endsWith(']') ? address.slice(1, -1) : address;
+}
+
+function isPrivateAddress(address) {
+  address = normalizedAddress(address);
+  const version = isIP(address);
+  if (version === 4) {
+    const [a, b] = address.split('.').map(Number);
+    return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
+  }
+  if (version === 6) return /^(fc|fd)/i.test(address);
+  return false;
+}
+
+function isLoopback(address) {
+  address = normalizedAddress(address);
+  return address === '::1' || (isIP(address) === 4 && address.startsWith('127.'));
+}
+
+function validateToken(token) {
+  if (typeof token !== 'string' || Buffer.byteLength(token) < 32) throw new Error('a runtime-injected token of at least 32 bytes is required');
+}
+
+export function createBridgeServer({ queue, token, host = '127.0.0.1', port = 8765 }) {
+  validateToken(token);
+  if (isIP(normalizedAddress(host)) === 0 || (!isLoopback(host) && !isPrivateAddress(host))) throw new Error('bridge host must be a loopback or private-network IP address');
+  if (!Number.isInteger(port) || port < 0 || port > 65535 || (port === 0 && !isLoopback(host))) throw new Error('bridge port must be between 1 and 65535, except ephemeral loopback tests');
   const server = createServer(async (req, res) => {
     const provided = req.headers.authorization?.replace(/^Bearer /, '') ?? '';
     const a = Buffer.from(provided), b = Buffer.from(token);
@@ -52,13 +79,16 @@ export function createBridgeServer({ queue, token, host = '127.0.0.1' }) {
     }
     res.writeHead(404).end();
   });
-  server.listen(0, host);
+  server.listen(port, host);
   return server;
 }
 
 export class MacPuller {
   constructor({ baseUrl, token, cursorStore, inboxNote, transcribe, fetchAudio }) {
-    this.baseUrl = baseUrl; this.token = token; this.cursorStore = cursorStore;
+    validateToken(token);
+    const endpoint = new URL(baseUrl);
+    if (endpoint.protocol !== 'http:' || endpoint.username || endpoint.password || endpoint.port === '' || (isIP(normalizedAddress(endpoint.hostname)) === 0) || (!isLoopback(endpoint.hostname) && !isPrivateAddress(endpoint.hostname))) throw new Error('bridge URL must use HTTP to a loopback or private-network IP and explicit port');
+    this.baseUrl = endpoint.origin; this.token = token; this.cursorStore = cursorStore;
     this.inboxNote = inboxNote; this.transcribe = transcribe; this.fetchAudio = fetchAudio;
   }
   async poll() {
@@ -86,9 +116,14 @@ export class MacPuller {
       handled.push(event.id);
     }
     if (handled.length) {
-      await writeFile(this.cursorStore, batch.next_cursor, { mode: 0o600 });
       const ack = await fetch(`${this.baseUrl}/v1/events/ack`, { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify({ ids: handled }) });
       if (!ack.ok) throw new Error(`bridge acknowledgement returned ${ack.status}`);
+      await mkdir(dirname(this.cursorStore), { recursive: true });
+      const temporaryCursor = `${this.cursorStore}.${randomUUID()}.tmp`;
+      try {
+        await writeFile(temporaryCursor, batch.next_cursor, { mode: 0o600, flag: 'wx' });
+        await rename(temporaryCursor, this.cursorStore);
+      } finally { await rm(temporaryCursor, { force: true }); }
     }
     return handled.length;
   }
