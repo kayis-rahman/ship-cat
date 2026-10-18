@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import ImageIO
+import SceneKit
 import Testing
 
 /// Guards the captain's verbatim asset direction: the committed pet sprite is the
@@ -18,6 +19,12 @@ import Testing
         .deletingLastPathComponent()
         .deletingLastPathComponent()
         .appendingPathComponent("App/Assets/Ember/ember.png")
+
+    private static let usdAssetURL = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appendingPathComponent("App/Assets/Ember/Ember.usdz")
 
     private struct Pixels {
         let width: Int
@@ -68,6 +75,24 @@ import Testing
     /// green pupil, not a warm coat or shadow pixel.
     private static func isGreen(_ p: (r: Int, g: Int, b: Int, a: Int)) -> Bool {
         p.a > 200 && p.g > p.r + 40 && p.g > p.b + 40
+    }
+
+    @Test func animatedUSDZHasExpectedRigAndAnimation() throws {
+        let scene = try SCNScene(url: Self.usdAssetURL, options: nil)
+        let skeleton = try #require(scene.rootNode.childNode(withName: "EmberSkeleton", recursively: true))
+        #expect(skeleton.animationKeys.contains(where: { $0.contains("EmberRigAction") }))
+        let rig = try #require(scene.rootNode.childNode(withName: "EmberRig", recursively: true))
+        let names = Set(rig.childNodes.map(\.name).compactMap { $0 })
+        let meshCount = rig.childNodes(passingTest: { node, _ in node.geometry != nil }).count
+        #expect(meshCount == 25)
+        #expect(names.contains("FrontNearLeg"))
+        #expect(names.contains("FrontFarLeg"))
+        #expect(names.contains("HindNearLeg"))
+        #expect(names.contains("HindFarLeg"))
+        #expect(names.contains("EarNear"))
+        #expect(names.contains("EarFar"))
+        #expect(names.contains("TailBaseMesh"))
+        #expect(names.contains("TailTipMesh"))
     }
 
     @Test func emberSpriteIsTheCommittedAsset() throws {

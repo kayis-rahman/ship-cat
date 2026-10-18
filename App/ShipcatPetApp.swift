@@ -32,7 +32,13 @@ final class PetAppDelegate: NSObject, NSApplicationDelegate {
 @MainActor
 final class PetController: NSObject {
     private var panel: NSPanel!
+    private var emberView: EmberViewport!
     private var statusItem: NSStatusItem!
+    private var motionTimer: Timer?
+    private var direction: CGFloat = -1
+    private var jumpProgress: CGFloat?
+    private var turnProgress: CGFloat?
+    private var interactionEnabled = false
     private var paused = false
     private var lifecycle: Lifecycle = .idle
     private let notifier = LifecycleNotifier()
@@ -47,38 +53,92 @@ final class PetController: NSObject {
 
     func show() {
         if panel == nil {
-            let content = PetView(lifecycle: lifecycle, paused: paused)
-            let hosting = NSHostingView(rootView: content)
-            panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 132, height: 132),
+            panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 160, height: 160),
                             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
             panel.isOpaque = false
             panel.backgroundColor = .clear
             panel.hasShadow = false
             panel.level = .floating
-            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-            panel.isMovableByWindowBackground = true
-            panel.contentView = hosting
-            panel.setAccessibilityLabel("Shipcat lifecycle pet")
+            panel.collectionBehavior = [.canJoinAllSpaces, .stationary]
+            panel.isMovableByWindowBackground = false
+            emberView = EmberViewport(frame: NSRect(x: 0, y: 0, width: 160, height: 160))
+            emberView.onPetClick = { [weak self] in self?.jumpProgress = 0 }
+            emberView.enablePetClick()
+            panel.contentView = emberView
+            panel.ignoresMouseEvents = true
+            panel.setAccessibilityLabel("Shipcat Ember desktop pet")
             if let screen = NSScreen.main {
-                panel.setFrameOrigin(NSPoint(x: screen.visibleFrame.maxX - 160, y: screen.visibleFrame.maxY - 160))
+                panel.setFrameOrigin(NSPoint(x: screen.visibleFrame.maxX - 160, y: screen.visibleFrame.minY))
             }
         }
         panel.orderFrontRegardless()
+        if motionTimer == nil {
+            motionTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+                Task { @MainActor in self?.advancePet() }
+            }
+        }
     }
 
-    func hide() { panel?.orderOut(nil) }
+    func hide() {
+        panel?.orderOut(nil)
+        motionTimer?.invalidate()
+        motionTimer = nil
+    }
     func verifyRender(to url: URL) {
         guard let panel, panel.styleMask.contains(.borderless), panel.isOpaque == false,
-              panel.level == .floating, panel.collectionBehavior.contains(.fullScreenAuxiliary),
-              let view = panel.contentView else { fatalError("Pet window contract failed") }
-        view.layoutSubtreeIfNeeded()
-        guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { fatalError("No render surface") }
-        view.cacheDisplay(in: view.bounds, to: bitmap)
-        guard let png = bitmap.representation(using: .png, properties: [:]) else { fatalError("PNG encoding failed") }
+              panel.level == .floating, panel.ignoresMouseEvents,
+              panel.collectionBehavior.contains(.canJoinAllSpaces), let emberView else {
+            fatalError("Pet window contract failed: \(emberView?.loadError ?? "window configuration")")
+        }
+        emberView.advance(0.25, motion: .walk, direction: direction)
+        guard let tiff = emberView.renderSnapshot().tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let png = bitmap.representation(using: .png, properties: [:]) else { fatalError("Ember USDZ did not render") }
         do { try png.write(to: url) } catch { fatalError("Render write failed: \(error)") }
-        guard png.count > 1000 else { fatalError("Pet render is unexpectedly empty") }
+        guard png.count > 1000 else { fatalError("Ember render is unexpectedly empty") }
     }
     func togglePause() { paused.toggle(); updateView() }
+
+    private func advancePet() {
+        guard let panel, let emberView, !paused else { return }
+        let dt = 1.0 / 30.0
+        let currentScreen = NSScreen.screens.first(where: { $0.frame.intersects(panel.frame) }) ?? NSScreen.main
+        guard let bounds = currentScreen?.visibleFrame else { return }
+        var frame = panel.frame
+        if var turn = turnProgress {
+            turn += dt / 0.5
+            if turn >= 1 {
+                turnProgress = nil
+                direction *= -1
+                jumpProgress = 0
+            } else {
+                turnProgress = turn
+            }
+        } else if var progress = jumpProgress {
+            progress += dt / 1.25
+            if progress >= 1 {
+                jumpProgress = nil
+                frame.origin.y = bounds.minY
+            } else {
+                jumpProgress = progress
+                frame.origin.y = bounds.minY + sin(progress * .pi) * 115
+            }
+        } else {
+            frame.origin.x += direction * 42 * dt
+            if frame.minX <= bounds.minX || frame.maxX >= bounds.maxX {
+                turnProgress = 0
+            }
+        }
+        panel.setFrame(frame, display: false)
+        let motion: EmberViewport.Motion = turnProgress != nil ? .turn : (jumpProgress == nil ? .walk : .jump)
+        emberView.advance(dt, motion: motion, direction: direction, jumpProgress: jumpProgress ?? 0)
+    }
+
+    @objc private func toggleInteractionMode() {
+        interactionEnabled.toggle()
+        panel?.ignoresMouseEvents = !interactionEnabled
+        panel?.isMovableByWindowBackground = interactionEnabled
+    }
     func installMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.title = "🐈"
@@ -87,6 +147,7 @@ final class PetController: NSObject {
         menu.addItem(NSMenuItem(title: "Show Pet", action: #selector(showPet), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Hide Pet", action: #selector(hidePet), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Pause / Resume", action: #selector(pausePet), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Toggle Interaction Mode", action: #selector(toggleInteractionMode), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Choose Fleet Ledger…", action: #selector(chooseLedger), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Choose Discord Inbox Command…", action: #selector(chooseInboxCommand), keyEquivalent: ""))
         let inboxStatus = NSMenuItem(title: "Discord unread: Unknown", action: nil, keyEquivalent: "")
@@ -198,7 +259,9 @@ final class PetController: NSObject {
         } catch { NSLog("Shipcat login-item configuration failed: %@", String(describing: type(of: error))) }
     }
     @objc private func quit() { NSApp.terminate(nil) }
-    private func updateView() { panel?.contentView = NSHostingView(rootView: PetView(lifecycle: lifecycle, paused: paused, unreadCount: unreadSnapshot?.count)) }
+    private func updateView() {
+        panel?.setAccessibilityLabel("Shipcat Ember, \(paused ? "paused" : lifecycle.rawValue)")
+    }
 }
 
 @MainActor
