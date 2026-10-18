@@ -5,9 +5,8 @@ import { pathToFileURL } from 'node:url';
 export async function startBridgeService({ queuePath, token, host, port = 8765, client, captainUserId }) {
   const queue = new EventQueue(queuePath);
   await queue.load();
-  const voiceSources = new Map();
-  const source = new DiscordEventSource({ client, queue, captainUserId, voiceSources });
-  const server = createBridgeServer({ queue, token, host, port, voiceSources, privateBind: true });
+  const source = new DiscordEventSource({ client, queue, captainUserId });
+  const server = createBridgeServer({ queue, token, host, port, resolveVoiceAttachment: event => source.resolveVoiceAttachment(event), privateBind: true });
   source.start();
   return {
     queue,

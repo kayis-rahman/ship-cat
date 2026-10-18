@@ -44,6 +44,13 @@ async function makeHandoffCommand(dir) {
   return { command, output };
 }
 
+function voiceClient(id, channelId, voiceUrl) {
+  const voice = message({ id, channelId, author: { id: 'captain-1', bot: false }, flags: { bitfield: 1 << 13 }, attachments: new Map([['voice', { contentType: 'audio/ogg', url: voiceUrl }]]) });
+  const client = new EventEmitter();
+  client.channels = { fetch: async requestedChannel => requestedChannel === channelId ? { messages: { fetch: async ({ message: requestedId }) => requestedId === id ? voice : null } } : null };
+  return client;
+}
+
 async function fakeMLX(dir, fail = false) {
   const modelPath = join(dir, 'local-model');
   const modulePath = join(dir, 'python-modules');
@@ -121,14 +128,14 @@ test('configured handoff receives only the five approved message fields', async 
   } finally { if (server) await new Promise(resolve => server.close(resolve)); await rm(dir, { recursive: true, force: true }); }
 });
 
-test('only captain-authored voice messages expose transient audio to local MLX', async () => {
+test('only captain-authored voice messages can be refetched for local MLX', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'shipcat-voice-'));
   let server;
   try {
     const queue = new EventQueue(join(dir, 'queue.json')); await queue.load();
     const voiceUrl = 'https://cdn.discordapp.com/attachments/synthetic/audio.ogg';
-    const voiceSources = new Map();
-    const source = new DiscordEventSource({ client: new EventEmitter(), queue, captainUserId: 'captain-1', voiceSources });
+    const client = voiceClient('voice-1', 'channel-1', voiceUrl);
+    const source = new DiscordEventSource({ client, queue, captainUserId: 'captain-1' });
     const voice = message({ id: 'voice-1', author: { id: 'other-user', bot: false }, flags: { bitfield: 1 << 13 }, attachments: new Map([['a', { contentType: 'audio/ogg', url: voiceUrl }]]) });
     assert.equal(await source.ingest(voice), false);
     assert.deepEqual(queue.page().events, []);
@@ -138,8 +145,7 @@ test('only captain-authored voice messages expose transient audio to local MLX',
       id: 'voice-1', type: 'discord.voice',
       payload: { channel_id: 'channel-1', human_author: true, timestamp: stamp, message_text: '' }
     });
-    assert.deepEqual([...voiceSources], [['voice-1', voiceUrl]]);
-    server = await startServer(queue, { voiceSources, audioFetch: async () => new Response(Buffer.from('synthetic audio'), { headers: { 'content-type': 'audio/ogg' } }) });
+    server = await startServer(queue, { resolveVoiceAttachment: event => source.resolveVoiceAttachment(event), audioFetch: async () => new Response(Buffer.from('synthetic audio'), { headers: { 'content-type': 'audio/ogg' } }) });
     const response = await fetch(`http://127.0.0.1:${server.address().port}/v1/events/voice-1/audio`, { headers: { authorization: `Bearer ${token}` } });
     assert.equal(response.status, 200);
     assert.equal(await response.text(), 'synthetic audio');
@@ -153,10 +159,10 @@ for (const fail of [false, true]) {
     const mlx = await fakeMLX(dir, fail);
     try {
       const queue = new EventQueue(join(dir, 'queue.json')); await queue.load();
-      const voiceSources = new Map([['voice-mlx', 'https://cdn.discordapp.com/attachments/synthetic/voice.ogg']]);
       const event = syntheticEvent('discord.voice', { channel_id: 'channel-1', human_author: true, timestamp: stamp, message_text: '' });
       event.id = 'voice-mlx'; await queue.append(event);
-      server = await startServer(queue, { voiceSources, audioFetch: async () => new Response(Buffer.from('temporary synthetic audio'), { headers: { 'content-type': 'audio/ogg' } }) });
+      const source = new DiscordEventSource({ client: voiceClient('voice-mlx', 'channel-1', 'https://cdn.discordapp.com/attachments/synthetic/voice.ogg'), queue, captainUserId: 'captain-1' });
+      server = await startServer(queue, { resolveVoiceAttachment: row => source.resolveVoiceAttachment(row), audioFetch: async () => new Response(Buffer.from('temporary synthetic audio'), { headers: { 'content-type': 'audio/ogg' } }) });
       const { command, output } = await makeHandoffCommand(dir);
       const client = puller(server, dir, { handoffCommand: command, mlxModelPath: mlx.modelPath });
       if (fail) {
@@ -175,6 +181,76 @@ for (const fail of [false, true]) {
     } finally { mlx.restore(); if (server) await new Promise(resolve => server.close(resolve)); await rm(dir, { recursive: true, force: true }); }
   });
 }
+
+test('voice source is refetched after queue restart without persisted attachment data', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'shipcat-voice-restart-'));
+  let server;
+  const mlx = await fakeMLX(dir);
+  try {
+    const queuePath = join(dir, 'queue.json');
+    const firstQueue = new EventQueue(queuePath); await firstQueue.load();
+    const voiceUrl = 'https://cdn.discordapp.com/attachments/synthetic/recovered.ogg';
+    const originalSource = new DiscordEventSource({ client: new EventEmitter(), queue: firstQueue, captainUserId: 'captain-1' });
+    const incoming = message({ id: 'voice-restart', author: { id: 'captain-1', bot: false }, flags: { bitfield: 1 << 13 }, attachments: new Map([['audio', { contentType: 'audio/ogg', url: voiceUrl }]]) });
+    assert.equal(await originalSource.ingest(incoming), true);
+    const saved = JSON.parse(await readFile(queuePath, 'utf8'));
+    assert.deepEqual(saved.events[0], { id: 'voice-restart', type: 'discord.voice', payload: { channel_id: 'channel-1', human_author: true, timestamp: stamp, message_text: '' } });
+    const recoveredQueue = new EventQueue(queuePath); await recoveredQueue.load();
+    const recoveredClient = voiceClient('voice-restart', 'channel-1', voiceUrl);
+    let refetches = 0;
+    const originalFetch = recoveredClient.channels.fetch;
+    recoveredClient.channels.fetch = async (...args) => { refetches++; return originalFetch(...args); };
+    const recoveredSource = new DiscordEventSource({ client: recoveredClient, queue: recoveredQueue, captainUserId: 'captain-1' });
+    server = await startServer(recoveredQueue, { resolveVoiceAttachment: event => recoveredSource.resolveVoiceAttachment(event), audioFetch: async () => new Response(Buffer.from('synthetic recovered audio'), { headers: { 'content-type': 'audio/ogg' } }) });
+    const { command, output } = await makeHandoffCommand(dir);
+    const client = puller(server, dir, { handoffCommand: command, mlxModelPath: mlx.modelPath });
+    assert.equal(await client.poll(), 1);
+    assert.equal(refetches, 1);
+    assert.deepEqual(JSON.parse(await readFile(output, 'utf8')), { message_id: 'voice-restart', channel_id: 'channel-1', human_author: true, timestamp: stamp, message_text: 'synthetic local transcript' });
+    const audioPath = await readFile(join(mlx.modelPath, 'observed-audio-path'), 'utf8');
+    await assert.rejects(readFile(audioPath));
+  } finally { mlx.restore(); if (server) await new Promise(resolve => server.close(resolve)); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('missing refetched voice source is logged and dropped without handoff', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'shipcat-voice-missing-'));
+  let server;
+  const mlx = await fakeMLX(dir);
+  const oldWarn = console.warn;
+  const warnings = [];
+  console.warn = value => warnings.push(value);
+  try {
+    const queue = new EventQueue(join(dir, 'queue.json')); await queue.load();
+    const event = syntheticEvent('discord.voice', { channel_id: 'channel-1', human_author: true, timestamp: stamp, message_text: '' });
+    event.id = 'voice-gone'; await queue.append(event);
+    const client = new EventEmitter();
+    client.channels = { fetch: async () => null };
+    const source = new DiscordEventSource({ client, queue, captainUserId: 'captain-1' });
+    server = await startServer(queue, { resolveVoiceAttachment: row => source.resolveVoiceAttachment(row) });
+    const { command, output } = await makeHandoffCommand(dir);
+    const pull = puller(server, dir, { handoffCommand: command, mlxModelPath: mlx.modelPath });
+    assert.equal(await pull.poll(), 1);
+    assert.deepEqual(queue.page().events, []);
+    assert.deepEqual(warnings, ['Discord voice source missing; dropping event']);
+    assert.equal(await readFile(join(dir, 'cursor'), 'utf8'), 'voice-gone');
+    await assert.rejects(readFile(output));
+  } finally { console.warn = oldWarn; mlx.restore(); if (server) await new Promise(resolve => server.close(resolve)); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('concurrent appends and acknowledgements preserve every queued mutation', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'shipcat-queue-race-'));
+  try {
+    const path = join(dir, 'queue.json');
+    const queue = new EventQueue(path); await queue.load();
+    const events = Array.from({ length: 24 }, (_, index) => syntheticEvent('discord.message.text', { channel_id: 'channel-1', message_text: `message-${index}` }));
+    const appendOperations = events.map(event => queue.append(event));
+    const ackOperations = queue.acknowledge(events.filter((_, index) => index % 2 === 0).map(event => event.id));
+    await Promise.all([...appendOperations, ackOperations]);
+    assert.deepEqual(queue.page().events.map(event => event.id), events.filter((_, index) => index % 2 === 1).map(event => event.id));
+    const reloaded = new EventQueue(path); await reloaded.load();
+    assert.deepEqual(reloaded.page().events.map(event => event.id), events.filter((_, index) => index % 2 === 1).map(event => event.id));
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
 
 test('queue append failure does not commit candidate state', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'shipcat-append-failure-'));

@@ -42,6 +42,7 @@ async function atomicWrite(path, contents) {
 export class EventQueue {
   #events = new Map();
   #ids = new Set();
+  #mutationTail = Promise.resolve();
   constructor(path) { this.path = path; }
   async load() {
     try {
@@ -57,17 +58,26 @@ export class EventQueue {
   async #persist(events, ids) {
     await atomicWrite(this.path, JSON.stringify({ events: [...events.values()], ids: [...ids] }));
   }
+  #serialize(operation) {
+    const result = this.#mutationTail.then(operation);
+    this.#mutationTail = result.catch(() => {});
+    return result;
+  }
   async append(event) {
     if (!validateEvent(event)) throw new TypeError('invalid event');
-    if (this.#ids.has(event.id)) return false;
-    const events = new Map(this.#events);
-    const ids = new Set(this.#ids);
-    events.set(event.id, structuredClone(event));
-    ids.add(event.id);
-    await this.#persist(events, ids);
-    this.#events = events;
-    this.#ids = ids;
-    return true;
+    const record = structuredClone(event);
+    if (!validateEvent(record)) throw new TypeError('invalid event');
+    return this.#serialize(async () => {
+      if (this.#ids.has(record.id)) return false;
+      const events = new Map(this.#events);
+      const ids = new Set(this.#ids);
+      events.set(record.id, record);
+      ids.add(record.id);
+      await this.#persist(events, ids);
+      this.#events = events;
+      this.#ids = ids;
+      return true;
+    });
   }
   page(since = '', limit = 100) {
     const all = [...this.#events.values()];
@@ -75,14 +85,21 @@ export class EventQueue {
     const events = all.slice(start, start + limit);
     return { events: structuredClone(events), next_cursor: events.at(-1)?.id ?? since };
   }
-  isPendingVoice(id) { return this.#events.get(id)?.type === 'discord.voice'; }
+  voiceEvent(id) {
+    const event = this.#events.get(id);
+    return event?.type === 'discord.voice' ? structuredClone(event) : null;
+  }
   async acknowledge(ids) {
-    const events = new Map(this.#events);
-    const seenIds = new Set(this.#ids);
-    for (const id of ids) events.delete(id);
-    await this.#persist(events, seenIds);
-    this.#events = events;
-    this.#ids = seenIds;
+    if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string' || id.length === 0 || id.length > 200)) throw new TypeError('invalid acknowledgement IDs');
+    const messageIds = [...ids];
+    return this.#serialize(async () => {
+      const events = new Map(this.#events);
+      const seenIds = new Set(this.#ids);
+      for (const id of messageIds) events.delete(id);
+      await this.#persist(events, seenIds);
+      this.#events = events;
+      this.#ids = seenIds;
+    });
   }
 }
 
@@ -113,7 +130,7 @@ function permittedAudioUrl(value) {
   return url.protocol === 'https:' && ['cdn.discordapp.com', 'media.discordapp.net'].includes(url.hostname);
 }
 
-export function createBridgeServer({ queue, token, host = '127.0.0.1', port = 8765, voiceSources = new Map(), audioFetch = fetch, privateBind = false }) {
+export function createBridgeServer({ queue, token, host = '127.0.0.1', port = 8765, resolveVoiceAttachment, audioFetch = fetch, privateBind = false }) {
   validateToken(token);
   if (!permittedBridgeAddress(host) || (privateBind && (isLoopback(host) || !isPrivateAddress(host)))) throw new Error('bridge host must be an explicit private-network IP address');
   if (!Number.isInteger(port) || port < 0 || port > 65535 || (port === 0 && !isLoopback(host))) throw new Error('bridge port must be between 1 and 65535, except ephemeral loopback tests');
@@ -125,12 +142,15 @@ export function createBridgeServer({ queue, token, host = '127.0.0.1', port = 87
     const audioMatch = req.method === 'GET' && url.pathname.match(/^\/v1\/events\/([^/]+)\/audio$/);
     if (audioMatch) {
       const id = decodeURIComponent(audioMatch[1]);
-      const source = voiceSources.get(id);
-      if (!queue.isPendingVoice(id) || !source) { res.writeHead(404).end(); return; }
+      const event = queue.voiceEvent(id);
+      if (!event || !resolveVoiceAttachment) { res.writeHead(404).end(); return; }
       let response;
       try {
+        const source = await resolveVoiceAttachment(event);
+        if (!source) { console.warn('Discord voice source missing; dropping event'); res.writeHead(410).end(); return; }
         if (!permittedAudioUrl(source)) { res.writeHead(404).end(); return; }
         response = await audioFetch(source);
+        if (response.status === 404) { console.warn('Discord voice source missing; dropping event'); res.writeHead(410).end(); return; }
         if (!response.ok || !response.body || !response.headers.get('content-type')?.toLowerCase().startsWith('audio/')) { res.writeHead(502).end(); return; }
         res.writeHead(200, { 'content-type': response.headers.get('content-type'), 'cache-control': 'no-store' });
         await pipeline(response.body, res);
@@ -151,7 +171,6 @@ export function createBridgeServer({ queue, token, host = '127.0.0.1', port = 87
       } catch { res.writeHead(400).end(); return; }
       try { await queue.acknowledge(ids); }
       catch { res.writeHead(500).end(); return; }
-      for (const id of ids) voiceSources.delete(id);
       res.writeHead(204).end();
       return;
     }
@@ -162,14 +181,13 @@ export function createBridgeServer({ queue, token, host = '127.0.0.1', port = 87
 }
 
 export class DiscordEventSource extends EventEmitter {
-  constructor({ client, queue, captainUserId, voiceSources = new Map() }) {
+  constructor({ client, queue, captainUserId }) {
     super();
     if (!client || typeof client.on !== 'function' || typeof client.removeListener !== 'function') throw new TypeError('an authenticated Discord event client is required');
     if (typeof captainUserId !== 'string' || captainUserId.length === 0) throw new TypeError('captain user ID is required for voice authorization');
     this.client = client;
     this.queue = queue;
     this.captainUserId = captainUserId;
-    this.voiceSources = voiceSources;
     this.listener = message => { this.ingest(message).catch(error => this.emit('sourceError', error)); };
   }
   start() { this.client.on('messageCreate', this.listener); return this; }
@@ -191,12 +209,25 @@ export class DiscordEventSource extends EventEmitter {
       const attachment = [...(message.attachments?.values?.() ?? [])].find(item => typeof item.contentType === 'string' && item.contentType.toLowerCase().startsWith('audio/'));
       if (!attachment || typeof attachment.url !== 'string' || !permittedAudioUrl(attachment.url)) return false;
     }
-    const inserted = await this.queue.append(event);
-    if (isVoice && (inserted || this.queue.isPendingVoice(id))) {
-      const attachment = [...message.attachments.values()].find(item => typeof item.contentType === 'string' && item.contentType.toLowerCase().startsWith('audio/'));
-      this.voiceSources.set(id, attachment.url);
+    return this.queue.append(event);
+  }
+  async resolveVoiceAttachment(event) {
+    if (!validateEvent(event) || event.type !== 'discord.voice' || !event.payload.human_author) return null;
+    let channel;
+    let message;
+    try {
+      channel = await this.client.channels?.fetch(event.payload.channel_id, { force: true });
+      if (!channel?.messages?.fetch) return null;
+      message = await channel.messages.fetch({ message: event.id, force: true });
+    } catch (error) {
+      if (error?.status === 404 || [10003, 10008].includes(error?.code)) return null;
+      throw error;
     }
-    return inserted;
+    const authorId = message?.author?.id;
+    const voice = Boolean((Number(message?.flags?.bitfield ?? message?.flags) & voiceMessageFlag) !== 0);
+    if (!voice || message.id !== event.id || (message.channelId ?? message.channel?.id) !== event.payload.channel_id || message.author?.bot || authorId !== this.captainUserId) return null;
+    const attachment = [...(message.attachments?.values?.() ?? [])].find(item => typeof item.contentType === 'string' && item.contentType.toLowerCase().startsWith('audio/'));
+    return attachment && typeof attachment.url === 'string' && permittedAudioUrl(attachment.url) ? attachment.url : null;
   }
 }
 
@@ -238,6 +269,7 @@ function runHandoff(command, payload) {
 
 async function downloadAudio(baseUrl, token, id, directory) {
   const response = await fetch(`${baseUrl}/v1/events/${encodeURIComponent(id)}/audio`, { headers: { authorization: `Bearer ${token}` } });
+  if (response.status === 410) return null;
   if (!response.ok || !response.body || !response.headers.get('content-type')?.toLowerCase().startsWith('audio/')) throw new Error('voice audio unavailable from bridge');
   const audioPath = join(directory, 'voice-audio');
   await pipeline(response.body, createWriteStream(audioPath, { mode: 0o600, flags: 'wx' }));
@@ -274,6 +306,7 @@ export class MacPuller {
         const directory = await mkdtemp(join(tmpdir(), 'shipcat-mlx-'));
         try {
           const audioPath = await downloadAudio(this.baseUrl, this.token, event.id, directory);
+          if (!audioPath) { handled.push(event.id); continue; }
           payload.message_text = await this.transcriber.transcribe(audioPath);
           await rm(audioPath, { force: true });
         } finally { await rm(directory, { recursive: true, force: true }); }
