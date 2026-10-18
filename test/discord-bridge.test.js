@@ -125,7 +125,9 @@ test('configured handoff receives only the five approved message fields', async 
     });
     assert.deepEqual(queue.page().events, []);
     const persisted = JSON.parse(await readFile(join(dir, 'queue.json'), 'utf8'));
-    assert.deepEqual(persisted, { events: [], ids: ['message-1'] });
+    assert.deepEqual(persisted.events, []);
+    assert.deepEqual(persisted.acknowledged.map(record => record.id), ['message-1']);
+    assert.equal(typeof persisted.acknowledged[0].acknowledged_at, 'number');
   } finally { if (server) await new Promise(resolve => server.close(resolve)); await rm(dir, { recursive: true, force: true }); }
 });
 
@@ -236,6 +238,27 @@ test('missing refetched voice source is logged and dropped without handoff', asy
     assert.equal(await readFile(join(dir, 'cursor'), 'utf8'), 'voice-gone');
     await assert.rejects(readFile(output));
   } finally { console.warn = oldWarn; mlx.restore(); if (server) await new Promise(resolve => server.close(resolve)); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('acknowledged IDs deduplicate within 30 days and expire afterward', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'shipcat-id-retention-'));
+  try {
+    const path = join(dir, 'queue.json');
+    const queue = new EventQueue(path); await queue.load();
+    const event = syntheticEvent('discord.message.text', { message_text: 'retention test' });
+    assert.equal(await queue.append(event), true);
+    await queue.acknowledge([event.id]);
+    const withinWindow = new EventQueue(path); await withinWindow.load();
+    assert.equal(await withinWindow.append(event), false);
+    assert.deepEqual(withinWindow.page().events, []);
+    const persisted = JSON.parse(await readFile(path, 'utf8'));
+    persisted.acknowledged[0].acknowledged_at = Date.now() - 31 * 24 * 60 * 60 * 1000;
+    await writeFile(path, JSON.stringify(persisted));
+    const expired = new EventQueue(path); await expired.load();
+    assert.deepEqual(JSON.parse(await readFile(path, 'utf8')).acknowledged, []);
+    assert.equal(await expired.append(event), true);
+    assert.deepEqual(expired.page().events.map(row => row.id), [event.id]);
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
 test('concurrent appends and acknowledgements preserve every queued mutation', async () => {

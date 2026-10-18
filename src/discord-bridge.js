@@ -13,6 +13,7 @@ import { pipeline } from 'node:stream/promises';
 const voiceMessageFlag = 1 << 13;
 const eventTypes = new Set(['discord.message.text', 'discord.voice']);
 const payloadKeys = ['channel_id', 'human_author', 'timestamp', 'message_text'];
+const ACKNOWLEDGED_ID_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const mlxAdapterPath = fileURLToPath(new URL('./mlx-transcribe.py', import.meta.url));
 
 export function validateEvent(event) {
@@ -41,22 +42,32 @@ async function atomicWrite(path, contents) {
 
 export class EventQueue {
   #events = new Map();
-  #ids = new Set();
+  #acknowledged = new Map();
   #mutationTail = Promise.resolve();
   constructor(path) { this.path = path; }
   async load() {
     try {
       const state = JSON.parse(await readFile(this.path, 'utf8'));
-      if (!state || !Array.isArray(state.events) || !Array.isArray(state.ids) || !state.events.every(validateEvent) || !state.ids.every(id => typeof id === 'string' && id.length > 0 && id.length <= 200)) throw new Error('invalid queue file');
-      const ids = new Set(state.ids);
-      if (ids.size !== state.ids.length) throw new Error('invalid queue file');
-      if (state.events.some(event => !ids.has(event.id))) throw new Error('invalid queue file');
-      this.#events = new Map(state.events.map(event => [event.id, event]));
-      this.#ids = ids;
+      if (!state || !Array.isArray(state.events) || !Array.isArray(state.acknowledged) || !state.events.every(validateEvent)) throw new Error('invalid queue file');
+      const events = new Map(state.events.map(event => [event.id, event]));
+      const acknowledged = new Map();
+      for (const record of state.acknowledged) {
+        if (!record || Object.keys(record).sort().join(',') !== 'acknowledged_at,id' || typeof record.id !== 'string' || !record.id || record.id.length > 200 || !Number.isFinite(record.acknowledged_at) || acknowledged.has(record.id)) throw new Error('invalid queue file');
+        acknowledged.set(record.id, record.acknowledged_at);
+      }
+      if (events.size !== state.events.length || [...events.keys()].some(id => acknowledged.has(id))) throw new Error('invalid queue file');
+      const retained = this.#retainRecent(acknowledged, Date.now());
+      if (retained.size !== acknowledged.size) await this.#persist(events, retained);
+      this.#events = events;
+      this.#acknowledged = retained;
     } catch (error) { if (error.code !== 'ENOENT') throw error; }
   }
-  async #persist(events, ids) {
-    await atomicWrite(this.path, JSON.stringify({ events: [...events.values()], ids: [...ids] }));
+  #retainRecent(acknowledged, now) {
+    return new Map([...acknowledged].filter(([, timestamp]) => now - timestamp < ACKNOWLEDGED_ID_RETENTION_MS));
+  }
+  async #persist(events, acknowledged) {
+    const records = [...acknowledged].map(([id, timestamp]) => ({ id, acknowledged_at: timestamp }));
+    await atomicWrite(this.path, JSON.stringify({ events: [...events.values()], acknowledged: records }));
   }
   #serialize(operation) {
     const result = this.#mutationTail.then(operation);
@@ -68,14 +79,19 @@ export class EventQueue {
     const record = structuredClone(event);
     if (!validateEvent(record)) throw new TypeError('invalid event');
     return this.#serialize(async () => {
-      if (this.#ids.has(record.id)) return false;
+      const acknowledged = this.#retainRecent(this.#acknowledged, Date.now());
+      if (this.#events.has(record.id) || acknowledged.has(record.id)) {
+        if (acknowledged.size !== this.#acknowledged.size) {
+          await this.#persist(this.#events, acknowledged);
+          this.#acknowledged = acknowledged;
+        }
+        return false;
+      }
       const events = new Map(this.#events);
-      const ids = new Set(this.#ids);
       events.set(record.id, record);
-      ids.add(record.id);
-      await this.#persist(events, ids);
+      await this.#persist(events, acknowledged);
       this.#events = events;
-      this.#ids = ids;
+      this.#acknowledged = acknowledged;
       return true;
     });
   }
@@ -93,12 +109,20 @@ export class EventQueue {
     if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string' || id.length === 0 || id.length > 200)) throw new TypeError('invalid acknowledgement IDs');
     const messageIds = [...ids];
     return this.#serialize(async () => {
+      const now = Date.now();
       const events = new Map(this.#events);
-      const seenIds = new Set(this.#ids);
-      for (const id of messageIds) events.delete(id);
-      await this.#persist(events, seenIds);
+      const acknowledged = this.#retainRecent(this.#acknowledged, now);
+      let changed = acknowledged.size !== this.#acknowledged.size;
+      for (const id of messageIds) {
+        if (events.delete(id)) {
+          acknowledged.set(id, now);
+          changed = true;
+        }
+      }
+      if (!changed) return;
+      await this.#persist(events, acknowledged);
       this.#events = events;
-      this.#ids = seenIds;
+      this.#acknowledged = acknowledged;
     });
   }
 }
