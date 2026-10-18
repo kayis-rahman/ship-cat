@@ -24,7 +24,8 @@ Shipcat uses direct Developer ID distribution, not the Mac App Store. See [distr
 - [Developer ID packaging](docs/distribution.md)
 - [Milestone criteria](docs/milestones.md)
 - [Archived Path A charter](docs/archive/legacy-path-a-charter.md)
+- [Discord bridge operations and safety](docs/discord-bridge.md)
 - [Legacy JS bridge archive and parity checklist](docs/archive/legacy-js-bridge.md)
 - [Legacy JavaScript CLI configuration reference](docs/configuration.md)
 
-The old JavaScript CLI, Clawd sink, LaunchAgent generator, and nudges are retained as reference; see the [archive note](docs/archive/legacy-js-bridge.md) for parity and disposition. The historical Clawd M0 was not passed.
+The separate Discord bridge runs on a private-network Raspberry Pi, with Mac-side local voice transcription; it does not change the native app's no-network contract. The old JavaScript CLI, Clawd sink, LaunchAgent generator, and nudges are retained as reference; see the [archive note](docs/archive/legacy-js-bridge.md) for parity and disposition. The historical Clawd M0 was not passed.
