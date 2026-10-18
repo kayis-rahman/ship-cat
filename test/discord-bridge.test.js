@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter, once } from 'node:events';
 import { chmod, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { Writable } from 'node:stream';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { EventQueue, DiscordEventSource, MacPuller, createBridgeServer, syntheticEvent } from '../src/discord-bridge.js';
-import { startBridgeService } from '../src/discord-bridge-service.js';
+import { EventQueue, DiscordEventSource, MacPuller, createBridgeServer, runHandoff, syntheticEvent } from '../src/discord-bridge.js';
+import { reportSourceErrors, startBridgeService } from '../src/discord-bridge-service.js';
 
 const token = 'x'.repeat(40);
 const stamp = '2025-01-02T03:04:05.000Z';
@@ -307,6 +308,48 @@ test('ack failure preserves cursor and permits stable message-id retry', async (
     assert.equal(JSON.parse(await readFile(output, 'utf8')).message_id, event.id);
     assert.equal(await readFile(join(dir, 'cursor'), 'utf8'), event.id);
   } finally { globalThis.fetch = originalFetch; if (server) await new Promise(resolve => server.close(resolve)); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('service reports source failures without sensitive event or error details', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'shipcat-source-error-'));
+  const blockedPath = join(dir, 'queue-dir');
+  const queue = new EventQueue(join(blockedPath, 'queue.json')); await queue.load();
+  await writeFile(blockedPath, 'block');
+  const client = new EventEmitter();
+  const source = new DiscordEventSource({ client, queue, captainUserId: 'captain-1' });
+  const reports = [];
+  const stopReporting = reportSourceErrors(source, message => reports.push(message));
+  source.start();
+  const emitted = once(source, 'sourceError');
+  client.emit('messageCreate', message({ content: 'private synthetic message' }));
+  const [error] = await emitted;
+  assert.match(error.message, /EEXIST|ENOTDIR/);
+  assert.deepEqual(reports, ['Discord event ingestion failed']);
+  source.stop(); stopReporting();
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('handoff stdin EPIPE rejects and terminates the failed child', async () => {
+  const child = new EventEmitter();
+  let killed = false;
+  child.kill = () => { killed = true; };
+  child.stdin = new Writable({ write(_chunk, _encoding, callback) { const error = new Error('synthetic broken pipe'); error.code = 'EPIPE'; callback(error); } });
+  await assert.rejects(runHandoff('/synthetic/handoff', { message_id: 'synthetic-id' }, () => child), error => error.code === 'EPIPE');
+  assert.equal(killed, true);
+});
+
+test('failed local handoff leaves the event queued and cursor unchanged', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'shipcat-handoff-fail-'));
+  let server;
+  try {
+    const queue = new EventQueue(join(dir, 'queue.json')); await queue.load();
+    const event = syntheticEvent('discord.message.text', { message_text: 'retry me' }); await queue.append(event);
+    server = await startServer(queue);
+    const client = puller(server, dir, { handoffCommand: join(dir, 'not-present') });
+    await assert.rejects(client.poll());
+    assert.deepEqual(queue.page().events.map(row => row.id), [event.id]);
+    await assert.rejects(readFile(join(dir, 'cursor')));
+  } finally { if (server) await new Promise(resolve => server.close(resolve)); await rm(dir, { recursive: true, force: true }); }
 });
 
 test('service requires a private bind and bridge rejects wildcard/public addresses', async () => {

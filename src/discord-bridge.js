@@ -258,11 +258,24 @@ export class LocalMLXTranscriber {
   }
 }
 
-function runHandoff(command, payload) {
+export function runHandoff(command, payload, spawnProcess = spawn) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, [], { stdio: ['pipe', 'ignore', 'ignore'] });
-    child.once('error', reject);
-    child.once('close', code => code === 0 ? resolve() : reject(new Error(`local handoff exited ${code}`)));
+    const child = spawnProcess(command, [], { stdio: ['pipe', 'ignore', 'ignore'] });
+    let settled = false;
+    const fail = error => {
+      if (settled) return;
+      settled = true;
+      child.kill();
+      reject(error);
+    };
+    child.once('error', fail);
+    child.stdin.once('error', fail);
+    child.once('close', code => {
+      if (settled) return;
+      settled = true;
+      if (code === 0) resolve();
+      else reject(new Error(`local handoff exited ${code}`));
+    });
     child.stdin.end(JSON.stringify(payload));
   });
 }

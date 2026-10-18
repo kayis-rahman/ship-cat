@@ -2,11 +2,18 @@ import { EventQueue, DiscordEventSource, createBridgeServer } from './discord-br
 import { isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+export function reportSourceErrors(source, report = console.error) {
+  const listener = () => report('Discord event ingestion failed');
+  source.on('sourceError', listener);
+  return () => source.removeListener('sourceError', listener);
+}
+
 export async function startBridgeService({ queuePath, token, host, port = 8765, client, captainUserId }) {
   const queue = new EventQueue(queuePath);
   await queue.load();
   const source = new DiscordEventSource({ client, queue, captainUserId });
   const server = createBridgeServer({ queue, token, host, port, resolveVoiceAttachment: event => source.resolveVoiceAttachment(event), privateBind: true });
+  const stopReporting = reportSourceErrors(source);
   source.start();
   return {
     queue,
@@ -15,6 +22,7 @@ export async function startBridgeService({ queuePath, token, host, port = 8765, 
     close: async () => {
       source.stop();
       await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+      stopReporting();
     }
   };
 }
