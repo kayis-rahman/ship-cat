@@ -50,6 +50,50 @@ scene.frame_start = 1
 scene.frame_end = 96
 scene.render.film_transparent = True
 
+# Use the accepted regenerated turnaround images as measurable silhouette
+# constraints. These are the accepted front, two side, and rear three-quarter
+# views; the failed three-ear rear candidates are intentionally excluded.
+reference_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "..", "App", "Assets", "Ember", "References")
+reference_names = ("front-seed81032.png", "side-left-seed81002.png",
+                   "side-right-seed81012.png", "rear-three-quarter-seed81025.png")
+
+def reference_bounds(name):
+    image = bpy.data.images.load(os.path.join(reference_dir, name), check_existing=True)
+    width, height = image.size
+    pixels = image.pixels[:]
+    has_alpha = min(pixels[3::4]) < 0.99
+    points = []
+    for index in range(width * height):
+        offset = index * 4
+        visible = pixels[offset + 3] > 0.08 if has_alpha else max(pixels[offset:offset + 3]) > 0.06
+        if visible:
+            points.append((index % width, index // width))
+    if not points:
+        raise RuntimeError("Reference image has no visible fox: " + name)
+    return (min(p[0] for p in points), min(p[1] for p in points),
+            max(p[0] for p in points), max(p[1] for p in points))
+
+def bounds_ratio(bounds):
+    return (bounds[2] - bounds[0]) / (bounds[3] - bounds[1])
+
+bounds = {name: reference_bounds(name) for name in reference_names}
+side_ratio = (bounds_ratio(bounds[reference_names[1]]) +
+              bounds_ratio(bounds[reference_names[2]])) / 2
+front_ratio = bounds_ratio(bounds[reference_names[0]])
+# Keep authored anatomy proportions but fit the overall side length and frontal
+# depth to the accepted views. F-01 remains the canonical visual/style reference.
+model_side_ratio = 3.02 / 1.98
+model_front_ratio = 0.95 / 1.98
+reference_scale = (side_ratio / model_side_ratio,
+                   front_ratio / model_front_ratio, 1.0)
+
+def scaled_point(point):
+    return tuple(point[i] * reference_scale[i] for i in range(3))
+
+def scaled_size(size):
+    return tuple(size[i] * reference_scale[i] for i in range(3))
+
 
 def material(name, color, roughness=0.82):
     mat = bpy.data.materials.new(name)
@@ -82,8 +126,8 @@ bones = {}
 
 def add_bone(name, head, tail, parent=None):
     bone = edit.new(name)
-    bone.head = head
-    bone.tail = tail
+    bone.head = scaled_point(head)
+    bone.tail = scaled_point(tail)
     if parent:
         bone.parent = bones[parent]
     bone.use_connect = False
@@ -106,10 +150,10 @@ arm.select_set(False)
 
 
 def sphere(name, location, scale, mat, bone, segments=24, rings=16):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=segments, ring_count=rings, location=location)
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=segments, ring_count=rings, location=scaled_point(location))
     obj = bpy.context.object
     obj.name = name
-    obj.scale = scale
+    obj.scale = scaled_size(scale)
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     for poly in obj.data.polygons:
         poly.use_smooth = True
@@ -159,9 +203,11 @@ for name, x, y, bone in (
     sphere(name, (x, y, 0.37), (0.20, 0.17, 0.34), dark, bone)
     sphere(name + "Paw", (x + 0.055, y, 0.12), (0.22, 0.18, 0.14), dark, bone)
 
-# Animation is authored as a four-beat timeline in the USD. Each section has a
-# clean rest pose at both ends so the native controller can trigger matching
-# app-side clips without extracting undocumented exporter metadata.
+# One deterministic USD timeline: idle (1-24), walk (25-48), turn (49-60),
+# jump (61-96). The saved 30 fps animation reference is a side-on fox walk:
+# level torso, small rhythmic body bob, smooth diagonal-pair leg alternation,
+# and a relaxed counter-swinging tail. Its loop is used for cadence and gait
+# only; Ember's own accepted F-01/turnaround set remains the shape/color source.
 scene.frame_set(1)
 pose = arm.pose.bones
 
@@ -171,29 +217,47 @@ def key_rot(name, frame, axis, degrees):
     p.rotation_euler[axis] = math.radians(degrees)
     p.keyframe_insert(data_path="rotation_euler", frame=frame, group=name)
 
-# Idle: 1-24, tiny spine and tail-tip motion.
-for frame, angle in ((1, 0), (7, 1.2), (13, 0), (19, -1.2), (24, 0)):
-    key_rot("Spine", frame, 2, angle)
-    key_rot("TailTip", frame, 1, angle * 2)
-# Walk: 25-48, alternating fore/hind leg swings and tail counter-sway.
-for i, frame in enumerate(range(25, 49, 3)):
-    angle = 24 * math.sin((frame - 25) * math.pi / 12)
-    key_rot("FrontNearLeg", frame, 1, angle)
-    key_rot("HindFarLeg", frame, 1, angle)
-    key_rot("FrontFarLeg", frame, 1, -angle)
-    key_rot("HindNearLeg", frame, 1, -angle)
-    key_rot("TailBase", frame, 1, -angle * 0.25)
+def key_z(name, frame, value):
+    p = pose[name]
+    p.location.z = value
+    p.keyframe_insert(data_path="location", frame=frame, group=name)
+
+# Idle: breathe and make a restrained ear/tail response, not a static pose.
+for frame, phase in ((1, 0), (7, 1), (13, 0), (19, -1), (24, 0)):
+    key_rot("Spine", frame, 2, 0.7 * phase)
+    key_rot("Head", frame, 2, -0.3 * phase)
+    key_rot("EarNear", frame, 1, 1.2 * phase)
+    key_rot("EarFar", frame, 1, -1.0 * phase)
+    key_rot("TailBase", frame, 1, -1.4 * phase)
+    key_rot("TailTip", frame, 1, -2.0 * phase)
+
+# Walk: one seamless 24-frame / 1-second loop, matching the observed reference
+# cadence. Opposite diagonal pairs move together, as in a trot; shoulders and
+# hips stay coordinated while the body remains level with a subtle 2 cm bob.
+for offset in range(0, 25, 3):
+    frame = 25 + offset
+    phase = 2 * math.pi * offset / 24
+    swing = 22 * math.sin(phase)
+    body_bob = 0.02 * (1 - math.cos(2 * phase))
+    key_rot("FrontNearLeg", frame, 1, swing)
+    key_rot("HindFarLeg", frame, 1, swing)
+    key_rot("FrontFarLeg", frame, 1, -swing)
+    key_rot("HindNearLeg", frame, 1, -swing)
+    key_rot("Spine", frame, 2, 0.8 * math.sin(2 * phase))
+    key_z("Spine", frame, body_bob)
+    key_rot("TailBase", frame, 1, -5 * math.sin(phase))
+    key_rot("TailTip", frame, 1, -8 * math.sin(phase + 0.3))
 # Turn: 49-60, pivot the complete root to the opposite travel direction.
 for frame, angle in ((49, 0), (52, 55), (57, 145), (60, 180)):
     key_rot("Root", frame, 2, angle)
-# Jump: 61-96, crouch/rise/apex/fall/land. Root height is animated while
-# articulated legs tuck and extend.
-for frame, z, tuck in ((61, 0, 0), (64, 0, 28), (70, 0.45, 45), (77, 0.68, 35), (83, 0.38, 15), (89, 0, 0), (96, 0, 0)):
+# Jump: explicit crouch, rise, apex, fall and land beats. Root height is animated
+# while each leg is articulated; the app additionally moves the panel in screen space.
+for frame, z, tuck in ((61, 0, 0), (64, -0.06, 20), (67, 0.18, 38), (72, 0.55, 43), (77, 0.68, 30), (82, 0.46, 18), (87, 0.12, 8), (90, 0, 0), (96, 0, 0)):
     # The app owns final travel direction. Reset turn yaw at jump start to avoid
     # applying the renderer's window-facing transform twice.
     key_rot("Root", frame, 2, 0)
-    pose["Root"].location = (0, 0, z)
-    pose["Root"].keyframe_insert(data_path="location", frame=frame, group="Root")
+    key_z("Root", frame, z)
+    key_rot("Spine", frame, 2, -8 if frame == 64 else (5 if frame == 77 else 0))
     for limb in ("FrontNearLeg", "FrontFarLeg", "HindNearLeg", "HindFarLeg"):
         key_rot(limb, frame, 1, tuck if "Front" in limb else -tuck)
 # Blender's current layered actions default to Bezier interpolation. The app
@@ -274,3 +338,6 @@ print("EMBER_USDC", output_path, os.path.getsize(output_path))
 print("EMBER_BONES", len(arm.data.bones), ",".join(b.name for b in arm.data.bones))
 print("EMBER_MESHES", sum(1 for obj in scene.objects if obj.type == "MESH"))
 print("EMBER_FRAME_RANGE", scene.frame_start, scene.frame_end, "24fps")
+print("EMBER_REFERENCE_FILES", ",".join(reference_names))
+print("EMBER_REFERENCE_RATIOS", "side", round(side_ratio, 4), "front", round(front_ratio, 4),
+      "scale", tuple(round(value, 4) for value in reference_scale))
