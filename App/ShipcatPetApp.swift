@@ -25,6 +25,10 @@ final class PetAppDelegate: NSObject, NSApplicationDelegate {
             controller.verifyRender(to: URL(fileURLWithPath: "/tmp/shipcat-pet-render.png"))
             NSApp.terminate(nil)
         }
+        if CommandLine.arguments.contains("--verify-displays") {
+            controller.verifyDisplays()
+            NSApp.terminate(nil)
+        }
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 }
@@ -38,6 +42,7 @@ final class PetController: NSObject {
     private var direction: CGFloat = -1
     private var jumpProgress: CGFloat?
     private var turnProgress: CGFloat?
+    private var idleRemaining: TimeInterval = 2
     private var interactionEnabled = false
     private var paused = false
     private var lifecycle: Lifecycle = .idle
@@ -99,6 +104,21 @@ final class PetController: NSObject {
     }
     func togglePause() { paused.toggle(); updateView() }
 
+    func verifyDisplays() {
+        guard let panel, let emberView, NSScreen.screens.count >= 2 else {
+            fatalError("Display verification requires a loaded pet and two connected displays")
+        }
+        for screen in NSScreen.screens {
+            let frame = screen.visibleFrame
+            panel.setFrameOrigin(NSPoint(x: frame.minX, y: frame.minY))
+            emberView.advance(0.25, motion: .walk, direction: direction)
+            guard frame.intersects(panel.frame), emberView.loadError == nil,
+                  emberView.renderSnapshot().tiffRepresentation != nil else {
+                fatalError("Ember display verification failed on \(screen.localizedName)")
+            }
+        }
+    }
+
     private func advancePet() {
         guard let panel, let emberView, !paused else { return }
         let dt = 1.0 / 30.0
@@ -121,11 +141,14 @@ final class PetController: NSObject {
             progress += dt / 1.25
             if progress >= 1 {
                 jumpProgress = nil
+                idleRemaining = 1.5
                 frame.origin.y = bounds.minY
             } else {
                 jumpProgress = progress
                 frame.origin.y = bounds.minY + sin(progress * .pi) * 115
             }
+        } else if idleRemaining > 0 {
+            idleRemaining = max(0, idleRemaining - dt)
         } else {
             guard let step = ScreenEdgeMotion.advance(
                 frame: frame,
@@ -136,7 +159,7 @@ final class PetController: NSObject {
             if step.reachedOuterEdge { turnProgress = 0 }
         }
         panel.setFrame(frame, display: false)
-        let motion: EmberViewport.Motion = turnProgress != nil ? .turn : (jumpProgress == nil ? .walk : .jump)
+        let motion: EmberViewport.Motion = turnProgress != nil ? .turn : (jumpProgress != nil ? .jump : (idleRemaining > 0 ? .idle : .walk))
         emberView.advance(dt, motion: motion, direction: direction, jumpProgress: jumpProgress ?? 0)
     }
 
