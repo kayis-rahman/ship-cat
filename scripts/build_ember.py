@@ -149,14 +149,7 @@ bpy.ops.object.mode_set(mode="OBJECT")
 arm.select_set(False)
 
 
-def sphere(name, location, scale, mat, bone, segments=24, rings=16):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=segments, ring_count=rings, location=scaled_point(location))
-    obj = bpy.context.object
-    obj.name = name
-    obj.scale = scaled_size(scale)
-    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-    for poly in obj.data.polygons:
-        poly.use_smooth = True
+def attach_to_rig(obj, mat, bone):
     obj.data.materials.append(mat)
     group = obj.vertex_groups.new(name=bone)
     group.add(list(range(len(obj.data.vertices))), 1.0, "REPLACE")
@@ -167,12 +160,35 @@ def sphere(name, location, scale, mat, bone, segments=24, rings=16):
     return obj
 
 
+def sphere(name, location, scale, mat, bone, segments=24, rings=16):
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=segments, ring_count=rings, location=scaled_point(location))
+    obj = bpy.context.object
+    obj.name = name
+    obj.scale = scaled_size(scale)
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    for poly in obj.data.polygons:
+        poly.use_smooth = True
+    return attach_to_rig(obj, mat, bone)
+
+
+def ear_cone(name, location, scale, mat, bone):
+    bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.22, radius2=0.015,
+                                   depth=0.55, location=scaled_point(location))
+    obj = bpy.context.object
+    obj.name = name
+    obj.scale = scaled_size(scale)
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    for poly in obj.data.polygons:
+        poly.use_smooth = True
+    return attach_to_rig(obj, mat, bone)
+
+
 # One broad, softly tapered torso with the front of Ember pointing +X.
 sphere("Torso", (-0.12, 0, 0.78), (0.91, 0.47, 0.51), orange, "Spine", 32, 20)
 sphere("Chest", (0.49, 0, 0.73), (0.34, 0.40, 0.47), cream, "Spine")
 sphere("Head", (0.69, 0, 1.18), (0.57, 0.48, 0.49), orange, "Head", 32, 20)
-sphere("Muzzle", (1.07, -0.015, 1.01), (0.34, 0.35, 0.23), cream, "Head")
-sphere("Nose", (1.35, -0.015, 1.06), (0.09, 0.12, 0.08), dark, "Head", 16, 12)
+sphere("Muzzle", (1.08, -0.015, 1.01), (0.40, 0.27, 0.19), cream, "Head")
+sphere("Nose", (1.43, -0.015, 1.06), (0.09, 0.12, 0.08), dark, "Head", 16, 12)
 # Two separate eyes are set around the visible near/far sides; green iris and
 # dark pupil remain distinct even at the pet's intended small screen size.
 for side, y in (("Near", -0.423), ("Far", 0.423)):
@@ -183,15 +199,15 @@ for side, y in (("Near", -0.423), ("Far", 0.423)):
     sphere("Pupil" + side, (0.86, pupil_y, 1.34), (0.037, 0.027, 0.064), black, "Head", 16, 10)
 
 # Exactly two ears.
-sphere("EarNear", (0.64, -0.19, 1.60), (0.23, 0.19, 0.36), orange, "EarNear")
-sphere("EarInnerNear", (0.69, -0.355, 1.61), (0.12, 0.045, 0.22), light_orange, "EarNear")
-sphere("EarFar", (0.64, 0.19, 1.60), (0.23, 0.19, 0.36), orange, "EarFar")
-sphere("EarInnerFar", (0.69, 0.355, 1.61), (0.12, 0.045, 0.22), light_orange, "EarFar")
+ear_cone("EarNear", (0.64, -0.19, 1.68), (1.05, 0.86, 1.0), orange, "EarNear")
+sphere("EarInnerNear", (0.68, -0.345, 1.56), (0.10, 0.035, 0.13), light_orange, "EarNear")
+ear_cone("EarFar", (0.64, 0.19, 1.68), (1.05, 0.86, 1.0), orange, "EarFar")
+sphere("EarInnerFar", (0.68, 0.345, 1.56), (0.10, 0.035, 0.13), light_orange, "EarFar")
 
 # Exactly one tail, made of two overlapping tapered/rounded sections on one
 # bone chain. The ivory tip is a section of that single tail, not a second tail.
-sphere("TailBaseMesh", (-0.91, 0, 0.91), (0.48, 0.27, 0.27), orange, "TailBase")
-sphere("TailTipMesh", (-1.28, 0, 1.00), (0.30, 0.23, 0.22), cream, "TailTip")
+sphere("TailBaseMesh", (-1.02, 0, 0.98), (0.62, 0.36, 0.34), orange, "TailBase", 28, 20)
+sphere("TailTipMesh", (-1.58, 0, 1.08), (0.40, 0.29, 0.27), cream, "TailTip", 24, 16)
 
 # Four individually weighted leg meshes, two on each side of the torso.
 for name, x, y, bone in (
