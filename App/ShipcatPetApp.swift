@@ -102,9 +102,12 @@ final class PetController: NSObject {
     private func advancePet() {
         guard let panel, let emberView, !paused else { return }
         let dt = 1.0 / 30.0
-        let currentScreen = NSScreen.screens.first(where: { $0.frame.intersects(panel.frame) }) ?? NSScreen.main
-        guard let bounds = currentScreen?.visibleFrame else { return }
-        var frame = panel.frame
+        let screenFrames = NSScreen.screens.map(\.visibleFrame)
+        let frameBeforeMove = panel.frame
+        guard let currentScreenIndex = ScreenEdgeMotion.screenIndex(for: frameBeforeMove, in: screenFrames),
+              screenFrames.indices.contains(currentScreenIndex) else { return }
+        let bounds = screenFrames[currentScreenIndex]
+        var frame = frameBeforeMove
         if var turn = turnProgress {
             turn += dt / 0.5
             if turn >= 1 {
@@ -124,10 +127,13 @@ final class PetController: NSObject {
                 frame.origin.y = bounds.minY + sin(progress * .pi) * 115
             }
         } else {
-            frame.origin.x += direction * 42 * dt
-            if frame.minX <= bounds.minX || frame.maxX >= bounds.maxX {
-                turnProgress = 0
-            }
+            guard let step = ScreenEdgeMotion.advance(
+                frame: frame,
+                deltaX: direction * 42 * dt,
+                screens: screenFrames
+            ) else { return }
+            frame = step.frame
+            if step.reachedOuterEdge { turnProgress = 0 }
         }
         panel.setFrame(frame, display: false)
         let motion: EmberViewport.Motion = turnProgress != nil ? .turn : (jumpProgress == nil ? .walk : .jump)

@@ -8,7 +8,7 @@
   A00000000000000000000003 = {isa = PBXGroup; children = (A00000000000000000000006, A00000000000000000000007, A00000000000000000000004); sourceTree = "<group>"; };
   A00000000000000000000004 = {isa = PBXGroup; children = (A00000000000000000000008,); name = Products; sourceTree = "<group>"; };
    A00000000000000000000006 = {isa = PBXGroup; children = (A00000000000000000000009, A0000000000000000000000A, A0000000000000000000001A, A00000000000000000000020, A00000000000000000000022); name = App; path = App; sourceTree = "<group>"; };
-  A00000000000000000000007 = {isa = PBXGroup; children = (A0000000000000000000000B, A0000000000000000000000C, A0000000000000000000001C); name = ShipcatCore; path = Sources/ShipcatCore; sourceTree = "<group>"; };
+  A00000000000000000000007 = {isa = PBXGroup; children = (A0000000000000000000000B, A0000000000000000000000C, A0000000000000000000001C, A00000000000000000000024); name = ShipcatCore; path = Sources/ShipcatCore; sourceTree = "<group>"; };
   A00000000000000000000008 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ShipcatPet.app; sourceTree = BUILT_PRODUCTS_DIR; };
   A00000000000000000000009 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShipcatPetApp.swift; sourceTree = "<group>"; };
   A00000000000000000000020 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmberViewport.swift; sourceTree = "<group>"; };
@@ -17,15 +17,17 @@
   A0000000000000000000000B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ledger.swift; sourceTree = "<group>"; };
   A0000000000000000000000C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerReader.swift; sourceTree = "<group>"; };
   A0000000000000000000001C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxReceipts.swift; sourceTree = "<group>"; };
+  A00000000000000000000024 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenEdgeMotion.swift; sourceTree = "<group>"; };
   A0000000000000000000000D = {isa = PBXBuildFile; fileRef = A00000000000000000000009; };
   A0000000000000000000000E = {isa = PBXBuildFile; fileRef = A0000000000000000000000B; };
    A0000000000000000000000F = {isa = PBXBuildFile; fileRef = A0000000000000000000000C; };
    A0000000000000000000001D = {isa = PBXBuildFile; fileRef = A0000000000000000000001C; };
    A00000000000000000000021 = {isa = PBXBuildFile; fileRef = A00000000000000000000020; };
    A00000000000000000000023 = {isa = PBXBuildFile; fileRef = A00000000000000000000022; };
+   A00000000000000000000025 = {isa = PBXBuildFile; fileRef = A00000000000000000000024; };
    A0000000000000000000001B = {isa = PBXBuildFile; fileRef = A0000000000000000000001A; };
    A0000000000000000000001A = {isa = PBXFileReference; lastKnownFileType = image.png; path = Assets/Ember/ember.png; sourceTree = "<group>"; };
-  A00000000000000000000010 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A0000000000000000000000D, A0000000000000000000000E, A0000000000000000000000F, A0000000000000000000001D, A00000000000000000000021); runOnlyForDeploymentPostprocessing = 0; };
+  A00000000000000000000010 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A0000000000000000000000D, A0000000000000000000000E, A0000000000000000000000F, A0000000000000000000001D, A00000000000000000000021, A00000000000000000000025); runOnlyForDeploymentPostprocessing = 0; };
   A00000000000000000000011 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
    A00000000000000000000012 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A0000000000000000000001B, A00000000000000000000023); runOnlyForDeploymentPostprocessing = 0; };
   A00000000000000000000005 = {isa = PBXNativeTarget; buildConfigurationList = A00000000000000000000013; buildPhases = (A00000000000000000000010, A00000000000000000000011, A00000000000000000000012); buildRules = (); dependencies = (); name = ShipcatPet; productName = ShipcatPet; productReference = A00000000000000000000008; productType = "com.apple.product-type.application"; };
