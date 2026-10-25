@@ -5,6 +5,7 @@ import SceneKit
 final class EmberViewport: SCNView {
     enum Motion { case idle, walk, turn, jump }
     private let stage = SCNNode()
+    private let stateRing = EmberStateRingView(frame: .zero)
     private var clock: TimeInterval = 0
     private(set) var loadError: String?
     var onPetClick: (() -> Void)?
@@ -12,6 +13,8 @@ final class EmberViewport: SCNView {
     override init(frame: NSRect, options: [String: Any]? = nil) {
         super.init(frame: frame, options: options)
         backgroundColor = .clear
+        stateRing.autoresizingMask = [.width, .height]
+        addSubview(stateRing)
         isPlaying = false
         antialiasingMode = .multisampling4X
         guard let url = Bundle.main.url(forResource: "Ember", withExtension: "usdz"),
@@ -61,6 +64,19 @@ final class EmberViewport: SCNView {
         stage.eulerAngles.y = direction < 0 ? .pi : 0
     }
 
+    func updateVisualState(lifecycle: Lifecycle, unreadCount: Int?, paused: Bool) {
+        let lifecycleColor: NSColor
+        switch lifecycle {
+        case .working: lifecycleColor = .systemOrange
+        case .attention: lifecycleColor = .systemPink
+        case .merged: lifecycleColor = .systemGreen
+        case .cleanedUp: lifecycleColor = .systemGray
+        default: lifecycleColor = .systemBlue
+        }
+        stateRing.strokeColor = unreadCount.map { $0 > 0 } == true ? .systemPink : lifecycleColor
+        stage.opacity = paused ? 0.5 : 1
+    }
+
     @objc private func petClicked() { onPetClick?() }
 
     func enablePetClick() {
@@ -69,4 +85,19 @@ final class EmberViewport: SCNView {
     }
 
     func renderSnapshot() -> NSImage { snapshot() }
+}
+
+@MainActor
+private final class EmberStateRingView: NSView {
+    var strokeColor = NSColor.systemBlue {
+        didSet { needsDisplay = true }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        let ring = NSBezierPath(ovalIn: bounds.insetBy(dx: 10, dy: 10))
+        ring.lineWidth = 3
+        strokeColor.withAlphaComponent(0.9).setStroke()
+        ring.stroke()
+    }
 }

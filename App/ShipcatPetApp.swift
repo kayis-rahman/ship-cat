@@ -76,6 +76,7 @@ final class PetController: NSObject {
                 panel.setFrameOrigin(NSPoint(x: screen.visibleFrame.maxX - 160, y: screen.visibleFrame.minY))
             }
         }
+        updateView()
         panel.orderFrontRegardless()
         if motionTimer == nil {
             motionTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
@@ -289,6 +290,7 @@ final class PetController: NSObject {
     }
     @objc private func quit() { NSApp.terminate(nil) }
     private func updateView() {
+        emberView?.updateVisualState(lifecycle: lifecycle, unreadCount: unreadSnapshot?.count, paused: paused)
         panel?.setAccessibilityLabel("Shipcat Ember, \(paused ? "paused" : lifecycle.rawValue)")
     }
 }
