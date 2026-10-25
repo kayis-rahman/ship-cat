@@ -1,8 +1,12 @@
-"""Build the small animated Shipcat Ember USD scene headlessly with Blender.
+"""Build an unaccepted, hand-authored Ember geometry prototype as a USD scene.
+
+This non-MLX sphere/cone model does not pass the F-01..F-08 artwork gate and is
+not the captain's requested pose-capable replacement. Keep the app integration
+labeled as prototype until that replacement is built and accepted.
 
 Run through scripts/build-ember.sh, which packages the generated USDC as USDZ.
-The deliberately simple character uses an actual armature with independently
-weighted bones for its four legs, ears, and one segmented tail.
+The prototype uses an armature with independently weighted bones for its four
+legs, ears, and one segmented tail.
 """
 
 import bpy

@@ -17,6 +17,7 @@ final class EmberViewport: SCNView {
         addSubview(stateRing)
         isPlaying = false
         antialiasingMode = .multisampling4X
+        // Ember.usdz is an unaccepted hand-authored prototype, not the requested MLX-generated replacement.
         guard let url = Bundle.main.url(forResource: "Ember", withExtension: "usdz"),
               let imported = try? SCNScene(url: url, options: nil) else {
             loadError = "Ember.usdz missing or could not be loaded"

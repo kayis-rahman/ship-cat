@@ -4,7 +4,7 @@ This records the acceptance checks that could not be completed from this worktre
 
 ## Artwork gate
 
-The requested F-01.png through F-08.png inputs under `data/shipcat-fox-ember-gif-single-tail-v1/` are absent: 0 of 8 reference frames are available. The checkout has four turnaround images (`front-seed81032.png`, `side-left-seed81002.png`, `side-right-seed81012.png`, and `rear-three-quarter-seed81025.png`), which are not substitutes for those animation-frame references. Consequently, no frame-matched stills, side-by-side comparisons, 50-percent overlays, or frame-specific difference measurements can be produced from this checkout. The current hand-built primitive model has not passed the visual acceptance gate; do not treat it as the requested MLX-generated, pose-capable rework or as an accepted match.
+The F-01.png through F-08.png references and prior per-frame stills, side-by-sides, 50-percent overlays, and rejection reports were available at the host paths supplied by the task supervisor and have been copied into `docs/ember-match/`. The comparison report records the prior blockout's specific qualitative differences per frame. Those Blender stills are historical outputs from an earlier blockout, not renders of the current bundled USDZ, and the reports provide no numeric similarity score. They are rejected evidence, not acceptance. The current hand-built primitive model has not passed the visual gate and is not the requested MLX-generated, pose-capable replacement. See `docs/ember-match/MATCH-REPORT.md` for the comparison record and explicit limitations.
 
 ## Display and runtime gate
 
