@@ -106,10 +106,11 @@ final class PetController: NSObject {
     func togglePause() { paused.toggle(); updateView() }
 
     func verifyDisplays() {
-        guard let panel, let emberView, NSScreen.screens.count >= 2 else {
-            fatalError("Display verification requires a loaded pet and two connected displays")
+        let screens = NSScreen.screens
+        guard let panel, let emberView, !screens.isEmpty else {
+            fatalError("Display verification requires a loaded pet and an available display")
         }
-        for screen in NSScreen.screens {
+        for screen in screens {
             let frame = screen.visibleFrame
             panel.setFrameOrigin(NSPoint(x: frame.minX, y: frame.minY))
             emberView.advance(0.25, motion: .walk, direction: direction)
