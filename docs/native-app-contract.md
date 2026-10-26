@@ -25,7 +25,7 @@ This is a deliberately narrow read surface, not an OS-enforced filesystem sandbo
 
 ## Data boundary
 
-Consume only explicitly supplied ledger paths. Process canonical Firstmate v1 JSONL records read-only and only as complete lines. Support `task.dispatched`, `task.status`, `task.pr_ready`, `task.merged`, and `task.cleaned_up`; ignore unknown events. Scope task identity by home plus task ID. The optional Discord indicator uses only the separately selected, bounded receipts command described above. No network and no writes to Firstmate state. Board scope: Shipcat reads from the Firstmate home and makes no Firstmate project files.
+Consume only explicitly supplied ledger paths. Process canonical Firstmate v1 JSONL records read-only and only as complete lines. Support `task.dispatched`, `task.status`, `task.pr_ready`, `task.merged`, and `task.cleaned_up`; ignore unknown events. Scope task identity by home plus task ID. The optional Discord indicator uses only the separately selected, bounded receipts command described above. No network and no writes to Firstmate state. Board scope: Shipcat reads from the Firstmate home and makes no Firstmate project files; status data classes use separate refresh durations (live status 30s, snapshot 60s, backlog changes 5m, history hourly).
 
 ### Lifecycle is a derived property
 

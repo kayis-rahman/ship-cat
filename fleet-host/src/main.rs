@@ -111,7 +111,11 @@ fn serve_file(out: &Path, stream: &mut TcpStream, path: &str) {
     if full.is_dir() {
         let idx = full.join("index.html");
         if idx.is_file() {
-            serve_file(out, stream, &format!("{}/index.html", rel.trim_end_matches('/')));
+            serve_file(
+                out,
+                stream,
+                &format!("{}/index.html", rel.trim_end_matches('/')),
+            );
             return;
         }
     }
@@ -126,7 +130,9 @@ fn serve_file(out: &Path, stream: &mut TcpStream, path: &str) {
             let _ = stream.write_all(&bytes);
         }
         Err(_) => {
-            let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            let _ = stream.write_all(
+                b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            );
         }
     }
 }
@@ -135,26 +141,24 @@ fn serve(host: &str, port: u16, out: &Path) {
     let addr = format!("{}:{}", host, port);
     let listener = TcpListener::bind(&addr).expect("bind failed");
     println!("fm-fleet-ui: serving {} on {}", out.display(), addr);
-    for incoming in listener.incoming() {
-        if let Ok(mut stream) = incoming {
-            let mut buf = [0u8; 4096];
-            let n = stream.read(&mut buf).unwrap_or(0);
-            let req = String::from_utf8_lossy(&buf[..n]);
-            let first = req.lines().next().unwrap_or("");
-            let mut parts = first.split_whitespace();
-            let method = parts.next().unwrap_or("");
-            let target = parts.next().unwrap_or("/");
-            if method != "GET" && method != "HEAD" {
-                let _ = stream.write_all(b"HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
-                continue;
-            }
-            let path = target.split('?').next().unwrap_or("/").to_string();
-            let out_clone = out.to_path_buf();
-            thread::spawn(move || {
-                let mut s = stream;
-                serve_file(&out_clone, &mut s, &path);
-            });
+    for mut stream in listener.incoming().flatten() {
+        let mut buf = [0u8; 4096];
+        let n = stream.read(&mut buf).unwrap_or(0);
+        let req = String::from_utf8_lossy(&buf[..n]);
+        let first = req.lines().next().unwrap_or("");
+        let mut parts = first.split_whitespace();
+        let method = parts.next().unwrap_or("");
+        let target = parts.next().unwrap_or("/");
+        if method != "GET" && method != "HEAD" {
+            let _ = stream.write_all(b"HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            continue;
         }
+        let path = target.split('?').next().unwrap_or("/").to_string();
+        let out_clone = out.to_path_buf();
+        thread::spawn(move || {
+            let mut s = stream;
+            serve_file(&out_clone, &mut s, &path);
+        });
     }
 }
 
