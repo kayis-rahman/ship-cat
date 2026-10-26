@@ -39,7 +39,6 @@ fn assets_dir() -> PathBuf {
     }
 }
 
-
 fn mime_for(path: &Path) -> &'static str {
     match path.extension().and_then(|s| s.to_str()).unwrap_or("") {
         "html" | "htm" => "text/html; charset=utf-8",
@@ -52,7 +51,6 @@ fn mime_for(path: &Path) -> &'static str {
         _ => "application/octet-stream",
     }
 }
-
 
 fn safe_name(s: &str) -> Option<String> {
     let s = s.trim_matches('/');
@@ -118,18 +116,31 @@ fn serve_file(out: &Path, stream: &mut TcpStream, path: &str) {
     }
 }
 
-
 fn handle_post(out: &Path, target: &str, body: &[u8]) -> (u16, &'static str) {
     // Determine destination file relative to out/data.
     let rel = target.trim_start_matches('/');
     let rel = rel.split('?').next().unwrap_or("");
     let dest_name = if let Some(rest) = rel.strip_prefix("ingest/") {
-        if rest.is_empty() { return (400, "Bad Request"); }
-        let n = match safe_name(rest) { Some(n) => n, None => return (400, "Bad Request") };
-        if n.ends_with(".json") { n } else { format!("{}.json", n) }
+        if rest.is_empty() {
+            return (400, "Bad Request");
+        }
+        let n = match safe_name(rest) {
+            Some(n) => n,
+            None => return (400, "Bad Request"),
+        };
+        if n.ends_with(".json") {
+            n
+        } else {
+            format!("{}.json", n)
+        }
     } else if let Some(rest) = rel.strip_prefix("data/") {
-        let n = match safe_name(rest) { Some(n) => n, None => return (400, "Bad Request") };
-        if !n.ends_with(".json") { return (400, "Bad Request"); }
+        let n = match safe_name(rest) {
+            Some(n) => n,
+            None => return (400, "Bad Request"),
+        };
+        if !n.ends_with(".json") {
+            return (400, "Bad Request");
+        }
         n
     } else {
         return (404, "Not Found");
@@ -177,9 +188,14 @@ fn serve(host: &str, port: u16, out: &Path) {
                     Err(_) => break,
                 }
             }
-            if body.len() > cl { body.truncate(cl); }
+            if body.len() > cl {
+                body.truncate(cl);
+            }
             let (status, reason) = handle_post(&out_clone, &path, &body);
-            let resp = format!("HTTP/1.1 {} {}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", status, reason);
+            let resp = format!(
+                "HTTP/1.1 {} {}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                status, reason
+            );
             let mut s = stream;
             let _ = s.write_all(resp.as_bytes());
             continue;
