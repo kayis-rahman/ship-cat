@@ -3,7 +3,6 @@ use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::thread;
 
 const DEFAULT_HOST: &str = "127.0.0.1";
@@ -40,21 +39,6 @@ fn assets_dir() -> PathBuf {
     }
 }
 
-fn snapshot_script() -> Option<PathBuf> {
-    let home = fm_home().join("bin").join("fm-fleet-snapshot.sh");
-    if home.is_file() {
-        return Some(home);
-    }
-    let sibling = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap_or(Path::new("."))
-        .join("bin")
-        .join("fm-fleet-snapshot.sh");
-    if sibling.is_file() {
-        return Some(sibling);
-    }
-    None
-}
 
 fn mime_for(path: &Path) -> &'static str {
     match path.extension().and_then(|s| s.to_str()).unwrap_or("") {
@@ -67,6 +51,16 @@ fn mime_for(path: &Path) -> &'static str {
         "txt" => "text/plain; charset=utf-8",
         _ => "application/octet-stream",
     }
+}
+
+
+fn safe_name(s: &str) -> Option<String> {
+    let s = s.trim_matches('/');
+    if s.is_empty() || s.contains("..") || s.contains('/') || s.contains('\\') {
+        return None;
+    }
+    // allow optional .json suffix on class names
+    Some(s.to_string())
 }
 
 fn is_loopback(host: &str) -> bool {
@@ -82,21 +76,8 @@ fn build(out: &Path) {
     if idx.is_file() {
         let _ = fs::copy(&idx, out.join("index.html"));
     }
-    // Run the read-only snapshot helper if available; its output is observational.
-    if let Some(script) = snapshot_script() {
-        let result = Command::new("bash").arg(&script).arg("--json").output();
-        if let Ok(o) = result {
-            if o.status.success() {
-                let _ = fs::write(out.join("data").join("snapshot.json"), o.stdout);
-            } else {
-                let _ = fs::write(out.join("data").join("snapshot.json"), b"{}");
-            }
-        } else {
-            let _ = fs::write(out.join("data").join("snapshot.json"), b"{}");
-        }
-    } else {
-        let _ = fs::write(out.join("data").join("snapshot.json"), b"{}");
-    }
+    // Ensure data directory exists; do not clobber ingested Mac data.
+    let _ = fs::create_dir_all(out.join("data"));
 }
 
 fn serve_file(out: &Path, stream: &mut TcpStream, path: &str) {
@@ -137,6 +118,31 @@ fn serve_file(out: &Path, stream: &mut TcpStream, path: &str) {
     }
 }
 
+
+fn handle_post(out: &Path, target: &str, body: &[u8]) -> (u16, &'static str) {
+    // Determine destination file relative to out/data.
+    let rel = target.trim_start_matches('/');
+    let rel = rel.split('?').next().unwrap_or("");
+    let dest_name = if let Some(rest) = rel.strip_prefix("ingest/") {
+        if rest.is_empty() { return (400, "Bad Request"); }
+        let n = match safe_name(rest) { Some(n) => n, None => return (400, "Bad Request") };
+        if n.ends_with(".json") { n } else { format!("{}.json", n) }
+    } else if let Some(rest) = rel.strip_prefix("data/") {
+        let n = match safe_name(rest) { Some(n) => n, None => return (400, "Bad Request") };
+        if !n.ends_with(".json") { return (400, "Bad Request"); }
+        n
+    } else {
+        return (404, "Not Found");
+    };
+    let dir = out.join("data");
+    let _ = fs::create_dir_all(&dir);
+    let full = dir.join(&dest_name);
+    if fs::write(&full, body).is_err() {
+        return (500, "Internal Server Error");
+    }
+    (204, "No Content")
+}
+
 fn serve(host: &str, port: u16, out: &Path) {
     let addr = format!("{}:{}", host, port);
     let listener = TcpListener::bind(&addr).expect("bind failed");
@@ -149,12 +155,39 @@ fn serve(host: &str, port: u16, out: &Path) {
         let mut parts = first.split_whitespace();
         let method = parts.next().unwrap_or("");
         let target = parts.next().unwrap_or("/");
+        let path = target.split('?').next().unwrap_or("/").to_string();
+        let out_clone = out.to_path_buf();
+        if method == "POST" {
+            // Read body based on Content-Length.
+            let cl = req
+                .lines()
+                .find(|l| l.to_lowercase().starts_with("content-length:"))
+                .and_then(|l| l.split(':').nth(1))
+                .and_then(|v| v.trim().parse::<usize>().ok())
+                .unwrap_or(0);
+            let header_end = req.find("\r\n\r\n").map(|i| i + 4).unwrap_or(n);
+            let already = &buf[header_end..n];
+            let mut body = already.to_vec();
+            // read rest if needed
+            while body.len() < cl {
+                let mut tmp = [0u8; 8192];
+                match stream.read(&mut tmp) {
+                    Ok(0) => break,
+                    Ok(k) => body.extend_from_slice(&tmp[..k]),
+                    Err(_) => break,
+                }
+            }
+            if body.len() > cl { body.truncate(cl); }
+            let (status, reason) = handle_post(&out_clone, &path, &body);
+            let resp = format!("HTTP/1.1 {} {}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", status, reason);
+            let mut s = stream;
+            let _ = s.write_all(resp.as_bytes());
+            continue;
+        }
         if method != "GET" && method != "HEAD" {
             let _ = stream.write_all(b"HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
             continue;
         }
-        let path = target.split('?').next().unwrap_or("/").to_string();
-        let out_clone = out.to_path_buf();
         thread::spawn(move || {
             let mut s = stream;
             serve_file(&out_clone, &mut s, &path);
