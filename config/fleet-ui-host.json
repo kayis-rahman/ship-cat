@@ -1,0 +1,18 @@
+{
+  "host": "127.0.0.1",
+  "port": 8765,
+  "read_only": true,
+  "firstmate_home": "/Users/kayisrahman/Documents/workspace/firstmate",
+  "cadences": {
+    "live_status_seconds": 30,
+    "snapshot_seconds": 60,
+    "backlog_change_seconds": 300,
+    "history_hour_seconds": 3600
+  },
+  "data_classes": {
+    "live_status": 30,
+    "snapshot": 60,
+    "backlog_changes": 300,
+    "history": 3600
+  }
+}
