@@ -1,7 +1,7 @@
 {
   "host": "127.0.0.1",
   "port": 8765,
-  "read_only": true,
+  "read_only": false,
   "firstmate_home": "/Users/kayisrahman/Documents/workspace/firstmate",
   "cadences": {
     "live_status_seconds": 30,
