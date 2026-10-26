@@ -76,6 +76,7 @@ fn is_loopback(host: &str) -> bool {
 
 fn build(out: &Path) {
     fs::create_dir_all(out).expect("create out dir");
+    fs::create_dir_all(out.join("data")).expect("create data dir");
     // Copy dashboard assets (read-only source).
     let idx = assets_dir().join("index.html");
     if idx.is_file() {
@@ -86,15 +87,15 @@ fn build(out: &Path) {
         let result = Command::new("bash").arg(&script).arg("--json").output();
         if let Ok(o) = result {
             if o.status.success() {
-                let _ = fs::write(out.join("snapshot.json"), o.stdout);
+                let _ = fs::write(out.join("data").join("snapshot.json"), o.stdout);
             } else {
-                let _ = fs::write(out.join("snapshot.json"), b"{}");
+                let _ = fs::write(out.join("data").join("snapshot.json"), b"{}");
             }
         } else {
-            let _ = fs::write(out.join("snapshot.json"), b"{}");
+            let _ = fs::write(out.join("data").join("snapshot.json"), b"{}");
         }
     } else {
-        let _ = fs::write(out.join("snapshot.json"), b"{}");
+        let _ = fs::write(out.join("data").join("snapshot.json"), b"{}");
     }
 }
 
