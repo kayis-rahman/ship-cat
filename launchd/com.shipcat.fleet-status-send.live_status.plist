@@ -7,7 +7,7 @@
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>/Users/kayisrahman/Documents/workspace/shipcat-bridge/scripts/fleet-status-send.sh</string>
+    <string>/Users/kayisrahman/.local/bin/fleet-status-send.sh</string>
     <string>live_status</string>
   </array>
   <key>StartInterval</key>
