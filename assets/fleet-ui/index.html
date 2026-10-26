@@ -1,0 +1,2712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Firstmate Fleet</title>
+<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f4f6f8;
+    --bg-soft: #eef1f4;
+    --surface: #ffffff;
+    --surface-2: #f8fafc;
+    --line: #dbe1e8;
+    --line-strong: #c6ced8;
+    --text: #18212b;
+    --text-soft: #3f4b5a;
+    --muted: #5f6b7a;
+    --faint: #6b7789;
+    --accent: #1d4ed8;
+    --accent-soft: #e8efff;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 10px 28px rgba(16, 24, 40, .07);
+    --radius: 14px;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --state-working: #047857;
+    --state-working-bg: #ecfdf5;
+    --state-working-border: #a7f3d0;
+    --state-blocked: #b91c1c;
+    --state-blocked-bg: #fef2f2;
+    --state-blocked-border: #fecaca;
+    --state-parked: #92400e;
+    --state-parked-bg: #fffbeb;
+    --state-parked-border: #fde68a;
+    --state-done: #1e40af;
+    --state-done-bg: #eff6ff;
+    --state-done-border: #bfdbfe;
+    --state-other: #6d28d9;
+    --state-other-bg: #f5f3ff;
+    --state-other-border: #ddd6fe;
+    --ok: #047857;
+    --ok-bg: #ecfdf5;
+    --ok-border: #a7f3d0;
+    --danger: #b91c1c;
+    --danger-bg: #fef2f2;
+    --danger-border: #fecaca;
+    --warn: #92400e;
+    --warn-bg: #fffbeb;
+    --warn-border: #fde68a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  [v-cloak] { display: none; }
+  button, input, select { font: inherit; color: inherit; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { width: 100%; max-width: 1600px; margin: 0 auto; padding: 18px; min-width: 0; }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    background: rgba(255, 255, 255, .92);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar-inner {
+    max-width: 1600px; margin: 0 auto; padding: 10px 18px;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap; min-width: 0;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .brand-mark {
+    width: 32px; height: 32px; border-radius: 10px; flex: 0 0 auto;
+    background: linear-gradient(135deg, #1d4ed8, #0ea5e9);
+    display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 15px;
+    box-shadow: 0 2px 6px rgba(29, 78, 216, .24);
+  }
+  .brand h1 { font-size: 15px; margin: 0; letter-spacing: .1px; white-space: nowrap; }
+  .brand small { display: block; color: var(--muted); font-size: 11px; font-weight: 500; }
+  .tabs {
+    display: flex; gap: 3px; background: var(--bg-soft); border: 1px solid var(--line);
+    border-radius: 10px; padding: 3px;
+  }
+  .tabs button {
+    border: 0; background: transparent; color: var(--muted); cursor: pointer;
+    padding: 6px 14px; border-radius: 7px; font-weight: 650; font-size: 13px;
+  }
+  .tabs button:hover { color: var(--text); }
+  .tabs button.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(16, 24, 40, .12); }
+  .topbar-spacer { flex: 1 1 auto; }
+  .refresh { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; min-width: 0; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #059669; flex: 0 0 auto; }
+  .dot.busy { background: #d97706; animation: pulse 1s infinite; }
+  .dot.err { background: #dc2626; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .btn {
+    background: var(--surface); border: 1px solid var(--line-strong); color: var(--text);
+    padding: 6px 12px; border-radius: 9px; cursor: pointer; font-size: 12px; font-weight: 650;
+    white-space: nowrap; box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+  }
+  .btn:hover { border-color: #9aa8b8; background: #fbfcfe; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.ghost { background: transparent; box-shadow: none; }
+
+  .summary { display: flex; gap: 10px; flex-wrap: wrap; margin: 4px 0 14px; }
+  .summary-item {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    padding: 9px 14px; min-width: 100px; box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+  }
+  .summary-item b { display: block; font-size: 19px; line-height: 1.15; }
+  .summary-item span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .07em; }
+
+  .toolbar {
+    display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) auto auto auto;
+    margin-bottom: 14px; align-items: center;
+  }
+  .field { position: relative; min-width: 0; }
+  .field input, .field select {
+    width: 100%; background: var(--surface); border: 1px solid var(--line-strong);
+    border-radius: 10px; padding: 9px 12px; outline: none; min-width: 0;
+  }
+  .field input:focus, .field select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(29, 78, 216, .16);
+  }
+  .field select { cursor: pointer; }
+  .result-count { color: var(--muted); font-size: 12px; white-space: nowrap; text-align: right; }
+  .toolbar.filter-toolbar { grid-template-columns: auto minmax(0, 1fr); }
+
+  .board { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; min-width: 0; }
+  .column {
+    flex: 1 1 250px; min-width: 0; max-width: 100%;
+    background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 10px;
+  }
+  .column-working { --state-color: var(--state-working); --state-bg: var(--state-working-bg); --state-border: var(--state-working-border); }
+  .column-blocked { --state-color: var(--state-blocked); --state-bg: var(--state-blocked-bg); --state-border: var(--state-blocked-border); }
+  .column-parked { --state-color: var(--state-parked); --state-bg: var(--state-parked-bg); --state-border: var(--state-parked-border); }
+  .column-done { --state-color: var(--state-done); --state-bg: var(--state-done-bg); --state-border: var(--state-done-border); }
+  .column-other { --state-color: var(--state-other); --state-bg: var(--state-other-bg); --state-border: var(--state-other-border); }
+  .column-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 2px 4px 10px; min-width: 0;
+  }
+  .column-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .column-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--state-color); flex: 0 0 auto; }
+  .column-title h2 { margin: 0; font-size: 12.5px; letter-spacing: .02em; overflow-wrap: anywhere; }
+  .column-count {
+    background: var(--state-bg); color: var(--state-color); border: 1px solid var(--state-border);
+    border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 700; white-space: nowrap;
+  }
+  .cards { display: grid; gap: 9px; min-width: 0; }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 11px;
+    padding: 11px; min-width: 0; box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .card:hover { border-color: #b9c3cf; box-shadow: 0 4px 14px rgba(16, 24, 40, .08); }
+  .card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+  .project {
+    color: var(--accent); font-size: 10.5px; font-weight: 750; letter-spacing: .07em;
+    text-transform: uppercase; overflow-wrap: anywhere; min-width: 0;
+  }
+  .age { color: var(--muted); font-size: 11.5px; white-space: nowrap; flex: 0 0 auto; }
+  .card-title {
+    margin: 6px 0 5px; font-size: 14px; line-height: 1.35; font-weight: 650;
+    overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .card-now {
+    margin: 0 0 9px; color: var(--text-soft); font-size: 12.5px; line-height: 1.45;
+    overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; min-width: 0; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px; max-width: 100%;
+    padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 750;
+    letter-spacing: .03em; text-transform: uppercase; border: 1px solid transparent; white-space: nowrap;
+  }
+  .chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
+  .chip.working { color: var(--state-working); background: var(--state-working-bg); border-color: var(--state-working-border); }
+  .chip.blocked { color: var(--state-blocked); background: var(--state-blocked-bg); border-color: var(--state-blocked-border); }
+  .chip.parked { color: var(--state-parked); background: var(--state-parked-bg); border-color: var(--state-parked-border); }
+  .chip.done { color: var(--state-done); background: var(--state-done-bg); border-color: var(--state-done-border); }
+  .chip.other { color: var(--state-other); background: var(--state-other-bg); border-color: var(--state-other-border); }
+  .card-id { font-family: var(--mono); font-size: 10.5px; color: var(--muted); overflow-wrap: anywhere; text-align: right; min-width: 0; }
+  .card-links {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px;
+    padding-top: 8px; border-top: 1px dashed var(--line); font-size: 11px; min-width: 0;
+  }
+  .branch { font-family: var(--mono); color: var(--muted); overflow-wrap: anywhere; min-width: 0; }
+
+  .empty-state, .loading-state {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 34px 18px; text-align: center; color: var(--muted);
+  }
+  .loading-state { display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .spinner {
+    width: 15px; height: 15px; border: 2px solid var(--line-strong);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .banner.error {
+    background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;
+    padding: 10px 12px; border-radius: 10px; margin-bottom: 12px; overflow-wrap: anywhere;
+  }
+
+  .memories { display: grid; gap: 14px; }
+  .memory {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .04); overflow: hidden; min-width: 0;
+  }
+  .memory-head {
+    padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; gap: 10px;
+    align-items: baseline; flex-wrap: wrap; min-width: 0; background: var(--surface-2);
+  }
+  .memory-head h2 { margin: 0; font-size: 14px; }
+  .memory-head .path { color: var(--faint); font-family: var(--mono); font-size: 11px; overflow-wrap: anywhere; }
+  .memory-head .mtime { margin-left: auto; color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+  .memory-body { padding: 14px; min-width: 0; }
+  .memory-missing { color: var(--muted); font-style: italic; }
+  .toc { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .toc a {
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 7px;
+    padding: 4px 9px; font-size: 11.5px; color: var(--muted); max-width: 100%; overflow-wrap: anywhere;
+  }
+  .toc a:hover { color: var(--accent); border-color: #b9c9e8; text-decoration: none; }
+
+  .doc { min-width: 0; overflow-wrap: anywhere; }
+  .doc section { scroll-margin-top: 74px; margin-bottom: 18px; min-width: 0; }
+  .doc h1, .doc h2, .doc h3, .doc h4 { margin: 0 0 7px; line-height: 1.25; overflow-wrap: anywhere; color: var(--text); }
+  .doc h1 { font-size: 18px; }
+  .doc h2 { font-size: 15px; }
+  .doc h3 { font-size: 13.5px; }
+  .doc h4 { font-size: 12.5px; color: var(--muted); }
+  .doc p { margin: 0 0 8px; color: var(--text-soft); }
+  .doc ul, .doc ol { margin: 0 0 9px; padding-left: 20px; color: var(--text-soft); }
+  .doc li { margin: 2px 0; }
+  .doc code {
+    font-family: var(--mono); font-size: 12px; background: #f1f4f8;
+    border: 1px solid #dde4ec; border-radius: 4px; padding: 1px 4px; overflow-wrap: anywhere;
+  }
+  .doc pre {
+    background: #f7f9fc; border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px; overflow: auto; max-width: 100%;
+  }
+  .doc pre code { background: none; border: 0; padding: 0; white-space: pre; }
+  .doc blockquote {
+    margin: 0 0 9px; padding: 4px 0 4px 10px; border-left: 3px solid #bfdbfe;
+    color: var(--muted); background: #f8fbff;
+  }
+  .doc hr { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
+
+  @media (max-width: 820px) {
+    .wrap { padding: 14px; }
+    .topbar-inner { padding: 9px 14px; gap: 10px; }
+    .toolbar { grid-template-columns: minmax(0, 1fr); }
+    .toolbar .btn { justify-self: start; }
+    .toolbar .result-count { text-align: left; }
+  }
+  @media (max-width: 620px) {
+    .brand h1 { font-size: 14px; }
+    .summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+    .summary-item { min-width: 0; padding: 8px 10px; }
+    .summary-item b { font-size: 17px; }
+    .toolbar { grid-template-columns: minmax(0, 1fr) auto; }
+    .toolbar .field { grid-column: 1 / -1; }
+    .toolbar .btn { grid-column: 1 / 2; justify-self: start; }
+    .toolbar .result-count { grid-column: 2 / 3; text-align: right; align-self: center; }
+    .board { gap: 11px; }
+    .column { flex-basis: 100%; }
+    .memory-head .mtime { margin-left: 0; }
+  }
+  /* App shell */
+  .app-shell { display: flex; min-height: 100vh; min-width: 0; }
+  .sidebar {
+    width: 228px; flex: 0 0 228px; position: sticky; top: 0; height: 100vh;
+    display: flex; flex-direction: column; gap: 14px; padding: 16px 12px;
+    background: var(--surface); border-right: 1px solid var(--line); z-index: 30;
+  }
+  .sidebar .brand { padding: 2px 6px 10px; }
+  .nav { display: grid; gap: 2px; min-width: 0; }
+  .nav-section-label {
+    margin: 10px 8px 4px; color: var(--faint); font-size: 10px; font-weight: 800;
+    letter-spacing: .1em; text-transform: uppercase;
+  }
+  .nav button {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    width: 100%; border: 0; background: transparent; color: var(--muted); cursor: pointer;
+    padding: 8px 10px; border-radius: 9px; font-size: 13px; font-weight: 650; text-align: left;
+    min-width: 0;
+  }
+  .nav button:hover { background: var(--bg-soft); color: var(--text); }
+  .nav button.active { background: var(--accent-soft); color: var(--accent); }
+  .nav-count {
+    flex: 0 0 auto; min-width: 20px; text-align: center; padding: 0 6px;
+    border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2);
+    color: var(--muted); font-size: 10.5px; font-weight: 750;
+  }
+  .nav button.active .nav-count { background: var(--surface); border-color: #c7d7ff; color: var(--accent); }
+  .sidebar-foot { margin-top: auto; display: grid; gap: 8px; }
+  .away-badge {
+    display: flex; align-items: center; gap: 8px; padding: 8px 9px; min-width: 0;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2);
+    color: var(--muted); font-size: 12px; font-weight: 650;
+  }
+  .away-badge.away, .away-badge.quiet { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn); }
+  .updated-line { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11.5px; min-width: 0; }
+  .main-shell { flex: 1 1 auto; min-width: 0; }
+  .content { width: 100%; max-width: 1620px; margin: 0 auto; padding: 20px; min-width: 0; }
+  .mobilebar { display: none; }
+  .view-head {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;
+    margin-bottom: 16px; flex-wrap: wrap; min-width: 0;
+  }
+  .view-head h1 { margin: 0; font-size: 22px; line-height: 1.2; overflow-wrap: anywhere; }
+  .view-head p { margin: 5px 0 0; color: var(--muted); max-width: 88ch; overflow-wrap: anywhere; }
+  .view-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .section-title { margin: 22px 0 10px; font-size: 14px; letter-spacing: .02em; }
+
+  /* Panels and summaries */
+  .stack { display: grid; gap: 10px; min-width: 0; }
+  .panel {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .04); min-width: 0; overflow: hidden;
+  }
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 11px 14px; border-bottom: 1px solid var(--line); background: var(--surface-2);
+    min-width: 0;
+  }
+  .panel-head h2 { margin: 0; font-size: 13.5px; overflow-wrap: anywhere; }
+  .panel-body { padding: 14px; min-width: 0; }
+  .split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; min-width: 0; }
+  .stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; min-width: 0; }
+  .stat {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 11px;
+    padding: 10px 12px; min-width: 0; box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+  }
+  .stat b { display: block; font-size: 20px; line-height: 1.15; overflow-wrap: anywhere; }
+  .stat span { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; }
+  .stat small { display: block; color: var(--muted); font-size: 11px; margin-top: 3px; overflow-wrap: anywhere; }
+  .kv-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 14px; min-width: 0; }
+  .kv-grid > div { min-width: 0; }
+  .detail-label {
+    display: block; color: var(--faint); font-size: 10px; font-weight: 800;
+    letter-spacing: .08em; text-transform: uppercase; margin-bottom: 2px;
+  }
+  .detail-value { min-width: 0; color: var(--text-soft); overflow-wrap: anywhere; }
+  .mono { font-family: var(--mono); font-size: 11.5px; }
+  .wrap-any { overflow-wrap: anywhere; min-width: 0; }
+  .muted { color: var(--muted); }
+  .danger-text { color: var(--danger); }
+  .ok-text { color: var(--ok); }
+  .notice {
+    margin: 10px 0 0; padding: 9px 11px; border: 1px dashed var(--line-strong);
+    border-radius: 9px; color: var(--muted); font-size: 12px; background: var(--surface-2);
+  }
+  .data-note {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px 14px;
+    flex-wrap: wrap; margin-bottom: 14px; padding: 8px 11px; min-width: 0;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2);
+    color: var(--muted); font-size: 11.5px;
+  }
+  .data-stamp { font-weight: 700; color: var(--text-soft); overflow-wrap: anywhere; }
+  .refresh-hint { overflow-wrap: anywhere; }
+  .refresh-hint code {
+    font-family: var(--mono); background: #eef2f7; border: 1px solid #dde4ec;
+    border-radius: 4px; padding: 0 4px; overflow-wrap: anywhere;
+  }
+
+  /* Alert strip and generic badges */
+  .alert-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; margin-bottom: 14px; min-width: 0; }
+  .alert-tile {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 11px;
+    padding: 10px 12px; min-width: 0; cursor: pointer; text-align: left;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+  }
+  .alert-tile:hover { border-color: #b9c3cf; box-shadow: 0 4px 14px rgba(16, 24, 40, .08); }
+  .alert-tile.hot { border-color: var(--danger-border); background: linear-gradient(180deg, #fff, #fff7f7); }
+  .alert-tile b { font-size: 21px; line-height: 1.1; }
+  .alert-tile span { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+  .alert-tile .tile-kicker { color: var(--text-soft); font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .06em; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
+    padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--surface-2); color: var(--muted); font-size: 10.5px; font-weight: 750;
+    letter-spacing: .03em; text-transform: uppercase; white-space: nowrap;
+  }
+  .badge.danger { color: var(--danger); background: var(--danger-bg); border-color: var(--danger-border); }
+  .badge.warn { color: var(--warn); background: var(--warn-bg); border-color: var(--warn-border); }
+  .badge.ok { color: var(--ok); background: var(--ok-bg); border-color: var(--ok-border); }
+  .badge.info { color: var(--state-done); background: var(--state-done-bg); border-color: var(--state-done-border); }
+  .badge.soft { color: var(--muted); background: var(--surface-2); border-color: var(--line); }
+  .badge.neutral { color: var(--muted); background: var(--surface-2); border-color: var(--line); }
+  .link-button {
+    border: 0; background: transparent; color: var(--accent); cursor: pointer;
+    padding: 0; font-size: inherit; font-weight: 650; text-align: left; overflow-wrap: anywhere;
+  }
+  .link-button:hover { text-decoration: underline; }
+  .segmented { display: inline-flex; flex-wrap: wrap; gap: 3px; background: var(--bg-soft); border: 1px solid var(--line); border-radius: 10px; padding: 3px; min-width: 0; }
+  .segmented button { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 5px 11px; border-radius: 7px; font-size: 12px; font-weight: 650; }
+  .segmented button:hover { color: var(--text); }
+  .segmented button.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(16, 24, 40, .12); }
+  .progress { height: 7px; border-radius: 999px; background: #e8edf3; overflow: hidden; min-width: 0; }
+  .progress > span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+  .progress.low > span { background: var(--danger); }
+  .progress.mid > span { background: #d97706; }
+  .progress.ok > span { background: var(--ok); }
+
+  /* Board additions */
+  .card-title-btn {
+    display: block; width: 100%; margin: 6px 0 5px; padding: 0; border: 0;
+    background: transparent; color: var(--text); cursor: pointer; text-align: left;
+    font-size: 14px; line-height: 1.35; font-weight: 650; min-width: 0;
+  }
+  .card-title-btn:hover { color: var(--accent); }
+  .card-title-btn .card-title { margin: 0; }
+  .card-actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-left: auto; }
+  .expand-toggle {
+    display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line-strong);
+    background: var(--surface); color: var(--text-soft); border-radius: 7px;
+    padding: 2px 8px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap;
+  }
+  .expand-toggle:hover { border-color: #9aa8b8; background: #fbfcfe; }
+  .expand-chev {
+    display: inline-block; width: 0; height: 0; border-left: 4px solid transparent;
+    border-right: 4px solid transparent; border-top: 5px solid currentColor;
+    transition: transform .16s ease;
+  }
+  .expand-chev.open { transform: rotate(180deg); }
+  .expand-panel {
+    margin-top: 9px; padding: 10px; border: 1px solid var(--line); border-radius: 9px;
+    background: var(--surface-2); min-width: 0; animation: expand-in .18s ease-out;
+    transform-origin: top;
+  }
+  @keyframes expand-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+  .detail-loading { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+  .detail-grid { display: grid; gap: 9px; min-width: 0; }
+  .detail-row { display: grid; grid-template-columns: 118px minmax(0, 1fr); gap: 10px; min-width: 0; }
+  .detail-row > .detail-label { margin: 1px 0 0; }
+  .expand-panel .detail-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .expand-panel .detail-row > .detail-label { margin-top: 5px; }
+  .detail-note { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-soft); min-width: 0; }
+  .detail-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: 11px; margin-top: 4px; min-width: 0; }
+  .detail-meta code { font-family: var(--mono); background: #eef2f7; border: 1px solid #dde4ec; border-radius: 4px; padding: 0 4px; overflow-wrap: anywhere; }
+  .event-line { padding: 5px 0; border-bottom: 1px dashed var(--line); min-width: 0; }
+  .event-line:last-child { border-bottom: 0; }
+  .event-top { display: flex; flex-wrap: wrap; gap: 4px 9px; align-items: baseline; min-width: 0; }
+  .event-state { font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  .event-age { font-size: 10.5px; color: var(--faint); }
+  .event-note { color: var(--text-soft); font-size: 11.5px; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .detail-links { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; }
+
+  /* Decisions */
+  .decision-card {
+    background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--line-strong);
+    border-radius: 12px; padding: 12px 14px; min-width: 0;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+  }
+  .decision-card.impact-high { border-left-color: var(--danger); }
+  .decision-card.impact-medium { border-left-color: #d97706; }
+  .decision-card.impact-low { border-left-color: var(--state-done); }
+  .decision-top { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; }
+  .decision-question { margin: 8px 0 9px; font-size: 14.5px; line-height: 1.4; overflow-wrap: anywhere; }
+  .options { display: grid; gap: 5px; margin-bottom: 9px; min-width: 0; }
+  .option { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 7px; align-items: start; min-width: 0; }
+  .option-label {
+    display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px;
+    background: var(--accent-soft); color: var(--accent); font-size: 10.5px; font-weight: 800;
+    text-transform: uppercase;
+  }
+  .option span:last-child { overflow-wrap: anywhere; color: var(--text-soft); font-size: 12.5px; }
+  .decision-foot { display: flex; align-items: center; justify-content: space-between; gap: 9px; flex-wrap: wrap; min-width: 0; }
+  .decision-foot .muted { font-size: 11px; overflow-wrap: anywhere; }
+  .links { display: flex; align-items: center; gap: 7px 12px; flex-wrap: wrap; min-width: 0; font-size: 12px; }
+
+  /* Pull requests */
+  .pr-card {
+    background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--line-strong);
+    border-radius: 12px; padding: 12px 14px; min-width: 0; box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+  }
+  .pr-card.pr-conflict { border-left-color: var(--danger); }
+  .pr-card.pr-failing { border-left-color: var(--danger); }
+  .pr-card.pr-pending { border-left-color: #d97706; }
+  .pr-card.pr-ready { border-left-color: var(--ok); }
+  .pr-card.pr-merged { border-left-color: var(--state-done); }
+  .pr-card.pr-error { border-left-color: var(--danger); }
+  .pr-top { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; }
+  .pr-title { margin: 7px 0 9px; font-size: 14.5px; line-height: 1.35; overflow-wrap: anywhere; }
+  .pr-title a { color: var(--text); }
+  .pr-title a:hover { color: var(--accent); }
+  .pr-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px 12px; min-width: 0; }
+  .pr-grid > div { min-width: 0; }
+  .pr-grid .detail-label { margin-bottom: 2px; }
+  .pr-url { margin-top: 9px; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+  .failed-checks { margin-top: 7px; color: var(--danger); font-size: 11.5px; overflow-wrap: anywhere; }
+
+  /* Worker alerts and list */
+  .alert-card {
+    background: var(--surface); border: 1px solid var(--line); border-left: 4px solid #d97706;
+    border-radius: 12px; padding: 12px 14px; min-width: 0; box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+  }
+  .alert-card.severity-high { border-left-color: var(--danger); }
+  .alert-top { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; }
+  .alert-card h2 { margin: 7px 0 8px; font-size: 14.5px; line-height: 1.35; overflow-wrap: anywhere; }
+  .alert-facts { display: flex; flex-wrap: wrap; gap: 5px 14px; color: var(--muted); font-size: 12px; margin-bottom: 7px; min-width: 0; }
+  .alert-facts strong { color: var(--text-soft); }
+  .reasons { margin: 0 0 9px; padding-left: 18px; color: var(--text-soft); font-size: 12px; }
+  .reasons li { margin: 1px 0; overflow-wrap: anywhere; }
+  .worker-list { display: grid; gap: 6px; min-width: 0; }
+  .worker-row {
+    display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.5fr) minmax(0, 2fr) auto;
+    gap: 10px; align-items: center; padding: 9px 11px; min-width: 0;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  }
+  .worker-row:hover { border-color: #b9c3cf; }
+  .worker-main { min-width: 0; }
+  .worker-main .task-name { display: block; font-weight: 650; overflow-wrap: anywhere; }
+  .worker-main .task-id { display: block; color: var(--muted); font-family: var(--mono); font-size: 10.5px; overflow-wrap: anywhere; }
+  .worker-meta { display: flex; flex-wrap: wrap; gap: 4px 9px; align-items: center; color: var(--muted); font-size: 11px; min-width: 0; }
+  .worker-meta .model { font-family: var(--mono); overflow-wrap: anywhere; }
+  .worker-links { display: flex; gap: 9px; flex-wrap: wrap; font-size: 11.5px; justify-content: flex-end; }
+
+  /* Secondmates */
+  .secondmate-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 10px; min-width: 0; }
+  .secondmate-card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;
+    min-width: 0; box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+  }
+  .mate-top { display: flex; align-items: center; justify-content: space-between; gap: 9px; min-width: 0; }
+  .mate-top h3 { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+  .secondmate-card p { margin: 6px 0 9px; font-size: 12px; overflow-wrap: anywhere; }
+
+  /* Backlog */
+  .backlog-card {
+    background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--line-strong);
+    border-radius: 12px; padding: 11px 14px; min-width: 0; box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+  }
+  .backlog-card.bucket-blocked { border-left-color: var(--danger); }
+  .backlog-card.bucket-held { border-left-color: #d97706; }
+  .backlog-card.bucket-queued { border-left-color: var(--state-done); }
+  .backlog-card.bucket-in_flight { border-left-color: var(--state-working); }
+  .backlog-top { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; }
+  .backlog-card h2 { margin: 6px 0 2px; font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
+  .backlog-card .excerpt { margin: 7px 0 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  .hold-box {
+    display: grid; gap: 5px; margin-top: 8px; padding: 8px 10px;
+    background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 9px;
+    color: var(--text-soft); font-size: 12px; min-width: 0;
+  }
+  .hold-box > div { min-width: 0; overflow-wrap: anywhere; }
+  .bucket-blocked .hold-box { background: var(--danger-bg); border-color: var(--danger-border); }
+
+  /* Activity timeline */
+  .timeline { position: relative; display: grid; gap: 0; margin-left: 6px; min-width: 0; }
+  .timeline::before {
+    content: ""; position: absolute; left: 7px; top: 4px; bottom: 4px; width: 2px;
+    background: var(--line); border-radius: 2px;
+  }
+  .timeline-item { position: relative; display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; padding: 5px 0; min-width: 0; }
+  .timeline-dot {
+    position: relative; z-index: 1; width: 10px; height: 10px; margin: 5px 0 0 3px;
+    border-radius: 50%; background: var(--surface); border: 2px solid var(--line-strong);
+  }
+  .timeline-item.kind-merge .timeline-dot { border-color: var(--state-done); }
+  .timeline-item.kind-handoff .timeline-dot { border-color: var(--state-working); }
+  .timeline-item.kind-failure .timeline-dot { border-color: var(--danger); }
+  .timeline-body {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 9px 11px; min-width: 0;
+  }
+  .timeline-top { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; }
+  .timeline-body p { margin: 6px 0 0; color: var(--text-soft); font-size: 12.5px; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .timeline-body a { display: inline-block; margin-top: 5px; font-size: 11px; overflow-wrap: anywhere; }
+
+  /* Review boards */
+  .review-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; min-width: 0; }
+  .review-card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 11px 13px;
+    min-width: 0; box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+  }
+  .review-top { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; }
+  .review-card h2 { margin: 7px 0 4px; font-size: 13.5px; line-height: 1.35; overflow-wrap: anywhere; }
+  .review-card .detail-label { margin-top: 7px; }
+  .review-facts { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: 11.5px; margin-top: 6px; min-width: 0; }
+
+  /* Health */
+  .quota-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 10px; min-width: 0; }
+  .quota-card, .model-card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 11px 13px;
+    min-width: 0; box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+  }
+  .quota-card.health-critical, .model-card.health-unhealthy { border-color: var(--danger-border); }
+  .quota-card.health-tight, .quota-card.health-stale, .model-card.health-mixed { border-color: var(--warn-border); }
+  .quota-top, .model-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+  .quota-top h3, .model-top h3 { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+  .windows { display: grid; gap: 8px; margin-top: 9px; min-width: 0; }
+  .window { min-width: 0; }
+  .window-top { display: flex; justify-content: space-between; gap: 9px; font-size: 12px; margin-bottom: 3px; min-width: 0; }
+  .window-top span { overflow-wrap: anywhere; }
+  .effective { margin-top: 8px; padding-top: 7px; border-top: 1px dashed var(--line); min-width: 0; }
+  .model-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; margin-top: 11px; min-width: 0; }
+  .model-rows { display: grid; gap: 4px; margin-top: 8px; min-width: 0; }
+  .model-row {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 4px 0;
+    border-top: 1px dashed var(--line); font-size: 11px; min-width: 0;
+  }
+  .model-row > * { min-width: 0; }
+  .model-name { flex: 1 1 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .model-row .badge { font-size: 9.5px; padding: 1px 6px; }
+
+  /* Worker drawer */
+  .drawer-backdrop {
+    position: fixed; inset: 0; background: rgba(16, 24, 40, .34); z-index: 80;
+    animation: fade-in .16s ease-out;
+  }
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  .drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100vw); z-index: 90;
+    background: var(--surface); border-left: 1px solid var(--line); box-shadow: -18px 0 48px rgba(16, 24, 40, .18);
+    display: flex; flex-direction: column; min-width: 0; animation: drawer-in .2s ease-out;
+  }
+  @keyframes drawer-in { from { transform: translateX(22px); opacity: .6; } to { transform: none; opacity: 1; } }
+  .drawer-head {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+    padding: 14px 16px; border-bottom: 1px solid var(--line); min-width: 0;
+  }
+  .drawer-head h2 { margin: 0; font-size: 16px; line-height: 1.3; overflow-wrap: anywhere; }
+  .drawer-head p { margin: 3px 0 0; color: var(--muted); font-size: 11.5px; overflow-wrap: anywhere; }
+  .drawer-close {
+    flex: 0 0 auto; width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--surface-2); cursor: pointer; font-size: 16px; line-height: 1;
+    display: grid; place-items: center; color: var(--muted);
+  }
+  .drawer-close:hover { color: var(--text); border-color: var(--line-strong); }
+  .drawer-body { padding: 14px 16px 24px; overflow-y: auto; min-width: 0; }
+  .drawer-section { margin-bottom: 14px; min-width: 0; }
+  .drawer-section h3 { margin: 0 0 7px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+  .drawer-kv { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 5px 10px; font-size: 12px; min-width: 0; }
+  .drawer-kv > .detail-label { margin: 0; }
+  .drawer-kv > span:last-child { overflow-wrap: anywhere; color: var(--text-soft); }
+  .drawer .detail-row { grid-template-columns: 105px minmax(0, 1fr); }
+
+  @media (max-width: 1100px) {
+    .sidebar { width: 204px; flex-basis: 204px; }
+    .pr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 900px) {
+    .app-shell { display: block; }
+    .sidebar { display: none; }
+    .mobilebar {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap; position: sticky; top: 0; z-index: 40;
+      padding: 9px 14px; background: rgba(255, 255, 255, .94); backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--line);
+    }
+    .mobilebar .brand { padding: 0; flex: 1 1 auto; }
+    .mobile-controls { display: flex; align-items: center; gap: 7px; flex: 1 1 100%; }
+    .mobile-controls select {
+      flex: 1 1 auto; min-width: 0; background: var(--surface); border: 1px solid var(--line-strong);
+      border-radius: 9px; padding: 7px 10px;
+    }
+    .content { padding: 14px; }
+    .alert-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .split { grid-template-columns: minmax(0, 1fr); }
+    .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .worker-row { grid-template-columns: minmax(0, 1fr); gap: 5px; }
+    .worker-links { justify-content: flex-start; }
+    .detail-row, .drawer .detail-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+    .detail-row > .detail-label { margin-top: 4px; }
+  }
+  @media (max-width: 620px) {
+    .content { padding: 12px; }
+    .view-head h1 { font-size: 19px; }
+    .alert-strip { gap: 7px; }
+    .alert-tile { padding: 8px 10px; }
+    .alert-tile b { font-size: 18px; }
+    .stat b { font-size: 18px; }
+    .kv-grid { grid-template-columns: minmax(0, 1fr); }
+    .pr-grid { grid-template-columns: minmax(0, 1fr); }
+    .model-row { grid-template-columns: minmax(0, 1fr) auto auto; }
+    .model-row > *:nth-child(n+4) { display: none; }
+    .toolbar.filter-toolbar { grid-template-columns: minmax(0, 1fr); }
+    .toolbar.filter-toolbar .result-count { grid-column: 1 / -1; text-align: left; }
+    .drawer { width: 100vw; }
+    .drawer-head { padding: 12px 13px; }
+    .drawer-body { padding: 12px 13px 22px; }
+    .drawer-kv { grid-template-columns: 92px minmax(0, 1fr); }
+  }
+  .page-foot {
+    display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline;
+    padding: 12px 2px 6px; margin-top: 16px; border-top: 1px solid var(--line);
+    color: var(--faint); font-size: 12px; min-width: 0;
+  }
+  .page-foot span { min-width: 0; overflow-wrap: anywhere; }
+  .page-foot code { font-family: var(--mono); }
+
+</style>
+</head>
+<body>
+<div id="app" v-cloak class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">F</div>
+      <div>
+        <h1>Firstmate Fleet</h1>
+        <small>static read-only snapshot</small>
+      </div>
+    </div>
+    <nav class="nav" aria-label="Fleet views">
+      <template v-for="section in navSections" :key="section.label">
+        <div class="nav-section-label">{{ section.label }}</div>
+        <button v-for="item in section.items" :key="item.key" :class="{ active: view === item.key }" :aria-current="view === item.key ? 'page' : null" @click="setView(item.key)">
+          <span>{{ item.label }}</span>
+          <span v-if="navCount(item.key)" class="nav-count">{{ navCount(item.key) }}</span>
+        </button>
+      </template>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="away-badge" :class="awayTone" :title="awayTitle">
+        <span class="dot" :class="awayDot"></span>
+        <span>{{ awayLabel }}</span>
+      </div>
+      <div class="updated-line"><span class="dot" :class="{ busy: loading, err: !!snapshotError }"></span><span>{{ dataAsOfLabel }}</span></div>
+      <button class="btn" :disabled="loading" @click="refreshAll()">{{ loading ? 'Reloading...' : 'Reload' }}</button>
+    </div>
+  </aside>
+
+  <div class="main-shell">
+    <header class="mobilebar">
+      <div class="brand">
+        <div class="brand-mark">F</div>
+        <div>
+          <h1>Firstmate Fleet</h1>
+          <small>static read-only snapshot</small>
+        </div>
+      </div>
+      <div class="mobile-controls">
+        <select :value="view" aria-label="Fleet view" @change="setView($event.target.value)">
+          <option v-for="item in flatNavItems" :key="item.key" :value="item.key">{{ item.label }}</option>
+        </select>
+        <button class="btn" :disabled="loading" @click="refreshAll()">{{ loading ? 'Reloading...' : 'Reload' }}</button>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="data-note">
+        <span class="data-stamp">{{ dataAsOfLabel }}</span>
+        <span class="refresh-hint">Refresh: <code>{{ (meta && meta.refresh_command) || 'fm-fleet-ui (auto-refresh 60s)' }}</code>, then Reload</span>
+      </div>
+      <div v-if="snapshotError && (view === 'board' || view === 'workers' || view === 'decisions' || view === 'backlog' || view === 'fleet')" class="banner error">
+        Fleet snapshot failed: {{ snapshotError }}
+      </div>
+
+      <section v-show="view === 'board'">
+        <div class="view-head">
+          <div>
+            <h1>Board</h1>
+            <p>Every recorded worker, its current state, and the decisions or blocks that need attention.</p>
+          </div>
+        </div>
+        <div v-if="sourceNote(snapshot)" class="notice">{{ sourceNote(snapshot) }}</div>
+
+        <div class="alert-strip">
+          <button class="alert-tile" :class="{ hot: decisionCount > 0 }" @click="setView('decisions')">
+            <span class="tile-kicker">Open decisions</span>
+            <b>{{ decisionCount }}</b>
+            <span>{{ stuckCount }} stuck workers · {{ openPrCount }} open PRs</span>
+          </button>
+          <button class="alert-tile" :class="{ hot: stuckCount > 0 }" @click="setView('workers')">
+            <span class="tile-kicker">Stuck workers</span>
+            <b>{{ stuckCount }}</b>
+            <span>idle, unread steer, or dead route</span>
+          </button>
+          <button class="alert-tile" @click="setView('prs')">
+            <span class="tile-kicker">Pull requests</span>
+            <b>{{ openPrCount }}</b>
+            <span>{{ prReadyCount }} ready · {{ prFailingCount }} failing</span>
+          </button>
+          <button class="alert-tile" :class="{ hot: awayPresent }" @click="setView('fleet')">
+            <span class="tile-kicker">{{ awayPresent ? 'Away / quiet' : 'Wake queue' }}</span>
+            <b>{{ queueCount }}</b>
+            <span>{{ awayPresent ? awayLabel : 'waiting wakes, never drained here' }}</span>
+          </button>
+        </div>
+
+        <div class="summary">
+          <div class="summary-item"><b>{{ tasks.length }}</b><span>tasks</span></div>
+          <div class="summary-item"><b>{{ counts.working }}</b><span>working</span></div>
+          <div class="summary-item"><b>{{ counts.attention }}</b><span>needs attention</span></div>
+          <div class="summary-item"><b>{{ projectNames.length }}</b><span>projects</span></div>
+        </div>
+
+        <div class="toolbar">
+          <div class="field">
+            <input v-model="search" type="search" placeholder="Search tasks, projects, branches, latest line" aria-label="Search tasks">
+          </div>
+          <div class="field">
+            <select v-model="projectFilter" aria-label="Filter by project">
+              <option value="all">All projects</option>
+              <option v-for="project in projectNames" :key="project" :value="project">{{ project }}</option>
+            </select>
+          </div>
+          <button class="btn ghost" @click="clearFilters()" :disabled="!filtersActive">Clear</button>
+          <span class="result-count">{{ filteredTasks.length }} shown</span>
+        </div>
+
+        <div v-if="loading && !snapshot" class="loading-state">
+          <span class="spinner" aria-hidden="true"></span>
+          Loading the fleet board...
+        </div>
+        <div v-else-if="!filteredTasks.length" class="empty-state">
+          {{ tasks.length ? 'No tasks match these filters.' : 'No task records in this home yet.' }}
+        </div>
+        <div v-else class="board">
+          <section v-for="column in boardColumns" :key="column.key" class="column" :class="'column-' + column.key">
+            <header class="column-head">
+              <div class="column-title">
+                <span class="column-dot" aria-hidden="true"></span>
+                <h2>{{ column.label }}</h2>
+              </div>
+              <span class="column-count">{{ column.tasks.length }}</span>
+            </header>
+            <div class="cards">
+              <article v-for="task in column.tasks" :key="task.id" class="card" :class="{ 'card-expanded': expandedCards[task.id] }">
+                <div class="card-top">
+                  <span class="project">{{ projectName(task) }}</span>
+                  <span class="age">{{ latestAge(task) }}</span>
+                </div>
+                <button class="card-title-btn" @click="openWorker(task.id)">
+                  <span class="card-title">{{ shortTitle(task) }}</span>
+                </button>
+                <p class="card-now" :title="latestLine(task)">{{ latestLine(task) }}</p>
+                <div class="card-foot">
+                  <span class="chip" :class="stateTone(task)">{{ stateLabel(task) }}</span>
+                  <span class="card-id">{{ task.id }}</span>
+                </div>
+                <div class="card-links">
+                  <span v-if="task.branch" class="branch" :title="task.branch">{{ task.branch }}</span>
+                  <a v-if="prUrl(task)" :href="prUrl(task)" target="_blank" rel="noopener noreferrer">Pull request</a>
+                  <span class="card-actions">
+                    <button class="link-button" @click="openWorker(task.id)">Details</button>
+                    <button v-if="expandable(task)" class="expand-toggle" :aria-expanded="expandedCards[task.id] ? 'true' : 'false'" :aria-controls="'expand-' + task.id" @click.stop="toggleExpand(task)">
+                      {{ expandedCards[task.id] ? 'Collapse' : 'Expand more' }}<span class="expand-chev" :class="{ open: expandedCards[task.id] }"></span>
+                    </button>
+                  </span>
+                </div>
+                <div v-if="expandedCards[task.id]" :id="'expand-' + task.id" class="expand-panel" role="region" :aria-label="'Expanded detail for ' + shortTitle(task)">
+                  <div v-if="detailLoading[task.id]" class="detail-loading"><span class="spinner"></span>Loading detail...</div>
+                  <div v-else-if="detailErrors[task.id]" class="detail-note danger-text">{{ detailErrors[task.id] }}</div>
+                  <div v-else-if="details[task.id]" class="detail-grid">
+                    <div class="detail-row" v-if="details[task.id].latest.blocked">
+                      <span class="detail-label">Blocked</span>
+                      <div class="detail-value">
+                        <div class="detail-note">{{ cleanNote(details[task.id].latest.blocked.note) }}</div>
+                        <div class="detail-meta">
+                          <span v-if="details[task.id].latest.blocked.key">Key <code>{{ details[task.id].latest.blocked.key }}</code></span>
+                          <span>{{ ageLabel(details[task.id].latest.blocked.age_seconds + secondsSinceSnapshot()) }}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="detail-row" v-if="details[task.id].latest.needs_decision">
+                      <span class="detail-label">Needs decision</span>
+                      <div class="detail-value">
+                        <div class="detail-note">{{ cleanNote(details[task.id].latest.needs_decision.note) }}</div>
+                        <div class="detail-meta">
+                          <span v-if="details[task.id].decision.key">Key <code>{{ details[task.id].decision.key }}</code></span>
+                          <span v-if="details[task.id].decision.age_seconds != null">{{ ageLabel(details[task.id].decision.age_seconds + secondsSinceSnapshot()) }}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="detail-row" v-if="details[task.id].latest.paused">
+                      <span class="detail-label">Paused / parked</span>
+                      <div class="detail-value">
+                        <div class="detail-note">{{ cleanNote(details[task.id].latest.paused.note) }}</div>
+                        <div class="detail-meta">
+                          <span v-if="details[task.id].paused_until">Until <strong>{{ details[task.id].paused_until }}</strong></span>
+                          <span v-else>No until-time recorded</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="detail-row" v-if="details[task.id].waiting_on">
+                      <span class="detail-label">Waiting on</span>
+                      <div class="detail-value">{{ details[task.id].waiting_on }}</div>
+                    </div>
+                    <div class="detail-row">
+                      <span class="detail-label">Branch / mode</span>
+                      <div class="detail-value mono wrap-any">{{ details[task.id].meta.branch || 'no branch recorded' }} · {{ details[task.id].meta.mode || details[task.id].meta.yolo || 'mode not recorded' }}</div>
+                    </div>
+                    <div class="detail-row" v-if="details[task.id].backlog && (details[task.id].backlog.hold_reason || details[task.id].backlog.hold_until)">
+                      <span class="detail-label">Backlog hold</span>
+                      <div class="detail-value">
+                        <div class="detail-note">{{ details[task.id].backlog.hold_reason || 'No hold reason recorded.' }}</div>
+                        <div class="detail-meta"><span>Hold until: {{ details[task.id].backlog.hold_until || 'no hold date' }}</span></div>
+                      </div>
+                    </div>
+                    <div class="detail-row">
+                      <span class="detail-label">Recent events</span>
+                      <div class="detail-value">
+                        <div v-for="(event, index) in details[task.id].recent_events.slice(0, 5)" :key="index" class="event-line">
+                          <div class="event-top">
+                            <span class="event-state">{{ event.state || 'event' }}</span>
+                            <span class="event-age">{{ event.age_seconds != null ? ageLabel(event.age_seconds + secondsSinceSnapshot()) : 'no time' }}</span>
+                          </div>
+                          <div class="event-note">{{ cleanNote(event.note) }}</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="detail-row">
+                      <span class="detail-label">Links</span>
+                      <div class="detail-value detail-links">
+                        <a v-if="details[task.id].links.pr" :href="details[task.id].links.pr" target="_blank" rel="noopener noreferrer">Pull request</a>
+                        <a v-if="details[task.id].links.report" :href="details[task.id].links.report" target="_blank" rel="noopener noreferrer">Report</a>
+                        <a v-if="details[task.id].links.board" :href="details[task.id].links.board" target="_blank" rel="noopener noreferrer">Review board</a>
+                        <a v-else-if="details[task.id].links.link" :href="details[task.id].links.link" target="_blank" rel="noopener noreferrer">Link</a>
+                        <span v-if="!details[task.id].links.pr && !details[task.id].links.report && !details[task.id].links.board && !details[task.id].links.link" class="muted">No links recorded.</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </section>
+        </div>
+      </section>
+      <section v-show="view === 'decisions'">
+        <div class="view-head">
+          <div>
+            <h1>Open decisions</h1>
+            <p>Questions and blockers folded from task status logs, sorted by impact. Each call also has a read-only review page. This view never answers, resolves, or acknowledges a decision.</p>
+          </div>
+          <div class="view-actions">
+            <span class="muted">{{ decisionCount }} open</span>
+            <button class="btn" :disabled="decisionsLoading" @click="loadDecisions(true)">{{ decisionsLoading ? 'Reloading...' : 'Reload' }}</button>
+          </div>
+        </div>
+        <div v-if="decisionsError" class="banner error">{{ decisionsError }}</div>
+        <div v-if="sourceNote(decisions)" class="notice">{{ sourceNote(decisions) }}</div>
+        <div v-if="decisionsLoading && !decisions" class="loading-state"><span class="spinner"></span>Loading open decisions...</div>
+        <div v-else-if="!decisionList.length" class="empty-state">No open decisions in this fleet right now.</div>
+        <div v-else class="stack">
+          <article v-for="decision in decisionList" :key="decision.task.id + ':' + decision.key + ':' + decision.verb" class="decision-card" :class="'impact-' + decision.impact">
+            <div class="decision-top">
+              <span class="badge" :class="impactBadge(decision.impact)">{{ decision.impact }} impact</span>
+              <span class="badge" :class="decision.verb === 'blocked' ? 'danger' : 'warn'">{{ decision.verb === 'blocked' ? 'Blocked' : 'Needs decision' }}</span>
+              <span class="muted">{{ decision.task.project_name }} · {{ decision.task.id }}</span>
+              <span class="muted">{{ ageLabel(decision.age_seconds + secondsSinceSnapshot()) }}</span>
+            </div>
+            <h2 class="decision-question">{{ cleanNote(decision.question) }}</h2>
+            <div v-if="decision.options.length" class="options">
+              <div v-for="option in decision.options" :key="option.label" class="option">
+                <span class="option-label">{{ option.label }}</span>
+                <span>{{ option.text }}</span>
+              </div>
+            </div>
+            <p v-else class="muted">No explicit options were recorded. Answer through the task or its review board.</p>
+            <div class="decision-foot">
+              <span class="muted">Impact: {{ decision.impact_reason || 'unranked' }}</span>
+              <div class="links">
+                <a v-if="decision.review" :href="decision.review" target="_blank" rel="noopener noreferrer">Review page</a>
+                <a v-if="decision.lavish_url" :href="decision.lavish_url" target="_blank" rel="noopener noreferrer">Lavish</a>
+                <a v-if="decision.board_url" :href="decision.board_url" target="_blank" rel="noopener noreferrer">Review board</a>
+                <a v-else-if="decision.link_url" :href="decision.link_url" target="_blank" rel="noopener noreferrer">Open link</a>
+                <button class="link-button" @click="openWorker(decision.task.id)">Open worker</button>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section v-show="view === 'prs'">
+        <div class="view-head">
+          <div>
+            <h1>Pull requests</h1>
+            <p>Pull requests linked from task metadata and backlog records, with checks, merge state, conflicts, and age.</p>
+          </div>
+          <div class="view-actions">
+            <span class="muted" v-if="prs">{{ prs.counts.open }} open · {{ prs.counts.total }} tracked</span>
+            <button class="btn" :disabled="prsLoading" @click="loadPrs(true)">{{ prsLoading ? 'Reloading...' : 'Reload' }}</button>
+          </div>
+        </div>
+        <div v-if="prsError" class="banner error">{{ prsError }}</div>
+        <div v-if="prs && prs.error && prs.available !== false" class="banner error">{{ prs.error }}</div>
+        <div v-if="sourceNote(prs)" class="notice">{{ sourceNote(prs) }}</div>
+        <div v-if="prsLoading && !prs" class="loading-state"><span class="spinner"></span>Checking pull requests...</div>
+        <div v-else-if="prs && prs.available === false" class="empty-state">{{ prs.error || 'Pull requests are unavailable.' }}</div>
+        <template v-else-if="prs && prs.available !== false">
+          <div class="stat-grid">
+            <div class="stat"><b>{{ prs.counts.open }}</b><span>open</span></div>
+            <div class="stat"><b>{{ prs.counts.ready }}</b><span>ready</span><small>clean merge state</small></div>
+            <div class="stat"><b>{{ prs.counts.failing }}</b><span>failing</span><small>a check failed</small></div>
+            <div class="stat"><b>{{ prs.counts.conflict }}</b><span>conflict</span><small>merge conflict</small></div>
+          </div>
+          <div class="toolbar filter-toolbar" style="margin-top: 12px;">
+            <div class="segmented">
+              <button :class="{ active: prFilter === 'open' }" @click="prFilter = 'open'">Open ({{ prs.counts.open }})</button>
+              <button :class="{ active: prFilter === 'all' }" @click="prFilter = 'all'">All ({{ prs.counts.total }})</button>
+            </div>
+            <span class="result-count">{{ filteredPrs.length }} shown</span>
+          </div>
+          <div v-if="!filteredPrs.length" class="empty-state">No pull requests in this filter.</div>
+          <div v-else class="stack">
+            <article v-for="pr in filteredPrs" :key="pr.url" class="pr-card" :class="'pr-' + pr.status">
+              <div class="pr-top">
+                <span class="badge" :class="prBadgeClass(pr.status)">{{ prStatusLabel(pr.status) }}</span>
+                <span class="badge soft" v-if="pr.draft">Draft</span>
+                <span class="muted">{{ pr.project || pr.repo || 'unknown project' }}</span>
+                <span class="muted" v-if="pr.repo_name">{{ pr.repo_name }}</span>
+                <span class="muted" v-if="pr.age_seconds != null">opened {{ ageLabel(pr.age_seconds) }} ago</span>
+              </div>
+              <h2 class="pr-title"><a :href="pr.url" target="_blank" rel="noopener noreferrer">{{ pr.title || pr.url }}</a></h2>
+              <div class="pr-grid">
+                <div>
+                  <span class="detail-label">Checks</span>
+                  <span :class="checksClass(pr.checks)">{{ pr.checks.label }}</span>
+                </div>
+                <div>
+                  <span class="detail-label">Merge state</span>
+                  <span>{{ pr.merge_state || pr.mergeable || 'unknown' }}</span>
+                  <span v-if="pr.conflict" class="badge danger" style="margin-left: 5px;">Conflict</span>
+                </div>
+                <div>
+                  <span class="detail-label">Tasks</span>
+                  <span class="mono wrap-any">{{ pr.task_ids.join(', ') || 'not linked' }}</span>
+                </div>
+                <div>
+                  <span class="detail-label">Updated</span>
+                  <span>{{ pr.updated_age_seconds != null ? ageLabel(pr.updated_age_seconds) + ' ago' : 'unknown' }}</span>
+                </div>
+              </div>
+              <div class="pr-url mono">{{ pr.url }}</div>
+              <div v-if="pr.error" class="banner error" style="margin-top: 8px; margin-bottom: 0;">{{ pr.error }}</div>
+              <div v-if="pr.checks.failed_names.length" class="failed-checks">Failed: {{ pr.checks.failed_names.join(', ') }}</div>
+            </article>
+          </div>
+        </template>
+      </section>
+
+      <section v-show="view === 'workers'">
+        <div class="view-head">
+          <div>
+            <h1>Workers</h1>
+            <p>Stuck alerts for idle workers, unread steering, and dead model routes, followed by every recorded task.</p>
+          </div>
+          <div class="view-actions">
+            <span class="muted">{{ stuckCount }} alerts</span>
+            <button class="btn" :disabled="stuckLoading" @click="loadStuck(true)">{{ stuckLoading ? 'Reloading...' : 'Reload' }}</button>
+          </div>
+        </div>
+        <div v-if="stuckError" class="banner error">{{ stuckError }}</div>
+        <div v-if="sourceNote(stuck)" class="notice">{{ sourceNote(stuck) }}</div>
+        <div v-if="stuckLoading && !stuck" class="loading-state"><span class="spinner"></span>Checking worker liveness...</div>
+        <div v-else-if="stuckAlerts.length" class="stack">
+          <article v-for="alert in stuckAlerts" :key="alert.id" class="alert-card" :class="'severity-' + alert.severity_label">
+            <div class="alert-top">
+              <span class="badge" :class="alert.severity_label === 'high' ? 'danger' : 'warn'">{{ alert.severity_label }}</span>
+              <span class="muted">{{ alert.task.project_name }} · {{ alert.id }}</span>
+              <span class="muted">{{ alert.state }}</span>
+            </div>
+            <h2>{{ alert.task.title }}</h2>
+            <div class="alert-facts">
+              <span>Idle: <strong>{{ alert.idle_seconds != null ? ageLabel(alert.idle_seconds + secondsSinceSnapshot()) : 'unknown' }}</strong></span>
+              <span>Unread steer: <strong>{{ alert.unread_steer_seconds != null ? ageLabel(alert.unread_steer_seconds + secondsSinceSnapshot()) : 'none' }}</strong></span>
+              <span>Route: <strong :class="{ 'danger-text': alert.route.dead }">{{ alert.route.model || 'not recorded' }}</strong> <span class="muted">{{ alert.route.dead ? 'dead: ' + alert.route.reason : alert.route.status }}</span></span>
+            </div>
+            <ul class="reasons"><li v-for="reason in alert.reasons" :key="reason">{{ reason }}</li></ul>
+            <button class="btn ghost" @click="openWorker(alert.id)">Open worker</button>
+          </article>
+        </div>
+        <div v-else-if="!stuckLoading" class="empty-state">No stuck workers right now.</div>
+
+        <h2 class="section-title">All recorded tasks</h2>
+        <div v-if="!workerTasks.length" class="empty-state">No task records in this home.</div>
+        <div v-else class="worker-list">
+          <div v-for="task in workerTasks" :key="task.id" class="worker-row">
+            <div class="worker-main">
+              <button class="link-button task-name" @click="openWorker(task.id)">{{ shortTitle(task) }}</button>
+              <span class="task-id">{{ task.id }}</span>
+            </div>
+            <div class="worker-meta">
+              <span class="chip" :class="stateTone(task)">{{ stateLabel(task) }}</span>
+              <span class="model">{{ task.model || 'model not recorded' }}</span>
+            </div>
+            <div class="worker-meta">
+              <span class="wrap-any">{{ task.branch || 'no branch recorded' }}</span>
+              <span>{{ latestAge(task) }}</span>
+            </div>
+            <div class="worker-links">
+              <button class="link-button" @click="openWorker(task.id)">Details</button>
+              <a v-if="prUrl(task)" :href="prUrl(task)" target="_blank" rel="noopener noreferrer">PR</a>
+              <a v-if="reportLink(task)" :href="reportLink(task)" target="_blank" rel="noopener noreferrer">Report</a>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section v-show="view === 'fleet'">
+        <div class="view-head">
+          <div>
+            <h1>Fleet</h1>
+            <p>Machine headroom, away or quiet posture, and the registered secondmate homes.</p>
+          </div>
+          <div class="view-actions">
+            <button class="btn" :disabled="capacityLoading" @click="loadFleet(true)">{{ capacityLoading ? 'Reloading...' : 'Reload' }}</button>
+          </div>
+        </div>
+
+        <div class="split">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Machine capacity</h2>
+              <span class="muted" v-if="capacity && capacity.generated">{{ formatIso(capacity.generated) }}</span>
+            </div>
+            <div class="panel-body">
+              <div v-if="capacityError" class="banner error">{{ capacityError }}</div>
+              <div v-if="capacityLoading && !capacity" class="loading-state"><span class="spinner"></span>Reading machine capacity...</div>
+              <div v-else-if="capacity && !capacity.available" class="empty-state">{{ capacity.error || 'Capacity is unavailable.' }}</div>
+              <template v-else-if="capacity && capacity.summary">
+                <div class="stat-grid">
+                  <div class="stat"><b>{{ capacity.summary.ram_available_gb != null ? capacity.summary.ram_available_gb + ' GB' : 'unknown' }}</b><span>RAM free</span><small>{{ capacity.summary.ram_total_gb != null ? 'of ' + capacity.summary.ram_total_gb + ' GB' : 'total unknown' }}</small></div>
+                  <div class="stat"><b>{{ capacity.summary.running_workers != null ? capacity.summary.running_workers : 'unknown' }}</b><span>worker lanes</span><small>{{ capacity.summary.active_workers != null ? capacity.summary.active_workers + ' working' : 'active unknown' }}</small></div>
+                  <div class="stat"><b>{{ capacity.summary.load1 != null ? capacity.summary.load1 : 'unknown' }}</b><span>load 1m</span><small>{{ capacity.summary.cores ? capacity.summary.cores + ' cores' : 'cores unknown' }}</small></div>
+                  <div class="stat"><b>{{ capacity.summary.secondmates != null ? capacity.summary.secondmates : 'unknown' }}</b><span>secondmates</span><small>{{ capacity.summary.task_records != null ? capacity.summary.task_records + ' task records' : '' }}</small></div>
+                </div>
+                <div class="progress" :class="ramTone" style="margin-top: 12px;"><span :style="{ width: (capacity.summary.ram_free_pct || 0) + '%' }"></span></div>
+                <div class="kv-grid" style="margin-top: 12px;">
+                  <div><span class="detail-label">Disk</span><span>{{ diskLabel }}</span></div>
+                  <div><span class="detail-label">Admission</span><span>{{ capacityAdmitLabel }}</span></div>
+                  <div><span class="detail-label">Machine</span><span>{{ capacity.summary.machine || 'unknown' }}</span></div>
+                  <div><span class="detail-label">Uptime</span><span>{{ capacity.summary.uptime_s != null ? durationLabel(capacity.summary.uptime_s) : 'unknown' }}</span></div>
+                </div>
+                <p v-if="capacityReasons" class="notice">{{ capacityReasons }}</p>
+              </template>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Away and quiet posture</h2>
+              <span class="muted" v-if="away">read-only</span>
+            </div>
+            <div class="panel-body">
+              <div v-if="!away" class="loading-state"><span class="spinner"></span>Reading away posture...</div>
+              <div v-else-if="away.available === false" class="empty-state">{{ away.error || 'Away posture is unavailable.' }}</div>
+              <template v-else>
+                <div class="away-badge" :class="awayTone" style="width: 100%; padding: 11px 12px;">
+                  <span class="dot" :class="awayDot"></span>
+                  <span>{{ away.away.present ? (away.away.mode === 'quiet' ? 'Quiet mode is active' : 'Away posture is active') : 'Captain is present' }}</span>
+                </div>
+                <div class="kv-grid" style="margin-top: 12px;">
+                  <div><span class="detail-label">Entered</span><span>{{ away.away.present && away.away.age_seconds != null ? ageLabel(away.away.age_seconds) + ' ago' : 'not active' }}</span></div>
+                  <div><span class="detail-label">Wake queue</span><span>{{ away.wake_queue.count }} waiting · seq {{ away.wake_queue.seq || 'unknown' }}</span></div>
+                  <div><span class="detail-label">Kinds</span><span>{{ queueKinds }}</span></div>
+                  <div><span class="detail-label">Oldest wake</span><span>{{ away.wake_queue.oldest_age_seconds != null ? ageLabel(away.wake_queue.oldest_age_seconds) + ' ago' : 'queue empty' }}</span></div>
+                </div>
+                <div v-if="away.contract" style="margin-top: 12px;">
+                  <span class="detail-label">Away contract</span>
+                  <div class="kv-grid">
+                    <div><span class="detail-label">Reach</span><span>{{ away.contract.reach_channels || 'not recorded' }}</span></div>
+                    <div><span class="detail-label">Return</span><span>{{ away.contract.expected_return || 'not recorded' }}</span></div>
+                  </div>
+                  <p v-if="away.contract.words && away.contract.words !== '-'" class="notice">{{ away.contract.words }}</p>
+                </div>
+                <p class="notice">This page never drains, acknowledges, or mutates the wake queue. It only reports what is waiting.</p>
+              </template>
+            </div>
+          </section>
+        </div>
+
+        <h2 class="section-title">Secondmates</h2>
+        <div v-if="secondmatesError" class="banner error">{{ secondmatesError }}</div>
+        <div v-if="sourceNote(secondmatesSource)" class="notice">{{ sourceNote(secondmatesSource) }}</div>
+        <div v-if="secondmatesLoading && !matePanels.length" class="loading-state"><span class="spinner"></span>Reading secondmate homes...</div>
+        <div v-else-if="!matePanels.length" class="empty-state">No secondmates are registered in this home.</div>
+        <div v-else class="secondmate-grid">
+          <article v-for="mate in matePanels" :key="mate.id" class="secondmate-card">
+            <div class="mate-top">
+              <h3>{{ mate.id }}</h3>
+              <span class="badge" :class="mateBadge(mate.state)">{{ mate.state }}</span>
+            </div>
+            <p class="muted">{{ mate.reason || mate.description || 'No current status note.' }}</p>
+            <div class="kv-grid">
+              <div><span class="detail-label">Scope</span><span>{{ mate.scope }}</span></div>
+              <div><span class="detail-label">Projects</span><span>{{ (mate.projects || []).join(', ') || 'not listed' }}</span></div>
+              <div><span class="detail-label">Backlog</span><span>{{ mate.counts.queued || 0 }} queued · {{ mate.counts.holds || 0 }} held · {{ mate.counts.decisions_open || 0 }} decisions · {{ mate.counts.landed || 0 }} landed</span></div>
+              <div><span class="detail-label">Endpoint</span><span>{{ mate.endpoint ? (mate.endpoint.status || 'unknown') : 'no live task record' }}</span></div>
+            </div>
+            <div class="links" style="margin-top: 10px;">
+              <button class="btn ghost" @click="openWorker(mate.id)">Open secondmate</button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section v-show="view === 'backlog'">
+        <div class="view-head">
+          <div>
+            <h1>Backlog</h1>
+            <p>Queued, held, blocked, and in-flight work items with the hold reason and hold-until date recorded on each item.</p>
+          </div>
+          <div class="view-actions">
+            <span class="muted" v-if="backlog">{{ backlog.records.length }} open records</span>
+            <button class="btn" :disabled="backlogLoading" @click="loadBacklog(true)">{{ backlogLoading ? 'Reloading...' : 'Reload' }}</button>
+          </div>
+        </div>
+        <div v-if="backlogError" class="banner error">{{ backlogError }}</div>
+        <div v-if="sourceNote(backlog)" class="notice">{{ sourceNote(backlog) }}</div>
+        <div v-if="backlogLoading && !backlog" class="loading-state"><span class="spinner"></span>Reading the backlog...</div>
+        <div v-else-if="backlog && backlog.available === false" class="empty-state">{{ backlog.error || 'Backlog data is unavailable.' }}</div>
+        <template v-else-if="backlog && backlog.available !== false">
+          <div class="stat-grid">
+            <div class="stat"><b>{{ backlog.counts.queued }}</b><span>queued</span><small>no hold or blocker</small></div>
+            <div class="stat"><b>{{ backlog.counts.held }}</b><span>held</span><small>captain or date hold</small></div>
+            <div class="stat"><b>{{ backlog.counts.blocked }}</b><span>blocked</span><small>unresolved dependency</small></div>
+            <div class="stat"><b>{{ backlog.counts.in_flight }}</b><span>in flight</span><small>dispatched work</small></div>
+          </div>
+          <div class="toolbar filter-toolbar" style="margin-top: 12px;">
+            <div class="segmented">
+              <button v-for="filter in backlogFilters" :key="filter.key" :class="{ active: backlogFilter === filter.key }" @click="backlogFilter = filter.key">{{ filter.label }} ({{ filter.count }})</button>
+            </div>
+            <span class="result-count">{{ filteredBacklog.length }} shown</span>
+          </div>
+          <div v-if="!filteredBacklog.length" class="empty-state">No backlog items in this bucket.</div>
+          <div v-else class="stack">
+            <article v-for="item in filteredBacklog" :key="item.id" class="backlog-card" :class="'bucket-' + item.bucket">
+              <div class="backlog-top">
+                <span class="badge" :class="bucketBadge(item.bucket)">{{ bucketLabel(item.bucket) }}</span>
+                <span class="muted">{{ item.repo || 'no repo' }} · {{ item.kind || 'item' }}</span>
+                <span class="muted" v-if="item.since">since {{ item.since }}</span>
+                <span v-if="item.captain_actionable" class="badge warn">Captain action</span>
+              </div>
+              <h2>{{ item.title || item.id }}</h2>
+              <div class="mono muted wrap-any">{{ item.id }}</div>
+              <div v-if="item.held" class="hold-box">
+                <div><span class="detail-label">Hold reason</span>{{ item.hold_reason || 'No reason recorded.' }}</div>
+                <div><span class="detail-label">Hold until</span>{{ item.hold_until || 'No hold date' }}</div>
+              </div>
+              <div v-if="item.blocked" class="hold-box">
+                <div><span class="detail-label">Blocked by</span>{{ item.unresolved_blocker_ids.join(', ') || item.blocked_by_ids.join(', ') || item.blocked_reason || 'No blocker ids recorded.' }}</div>
+              </div>
+              <p v-if="item.body_excerpt" class="excerpt">{{ item.body_excerpt }}</p>
+              <div class="links" style="margin-top: 8px;">
+                <button v-if="taskFor(item.id)" class="link-button" @click="openWorker(item.id)">Open worker</button>
+                <a v-if="item.pr_url" :href="item.pr_url" target="_blank" rel="noopener noreferrer">Pull request</a>
+                <a v-if="reportLink(taskFor(item.id))" :href="reportLink(taskFor(item.id))" target="_blank" rel="noopener noreferrer">Report</a>
+              </div>
+            </article>
+          </div>
+        </template>
+      </section>
+
+      <section v-show="view === 'activity'">
+        <div class="view-head">
+          <div>
+            <h1>Activity</h1>
+            <p>Merges, handoffs, and failures recorded in task status logs during the last 24 hours.</p>
+          </div>
+          <div class="view-actions">
+            <button class="btn" :disabled="activityLoading" @click="loadActivity(true)">{{ activityLoading ? 'Reloading...' : 'Reload' }}</button>
+          </div>
+        </div>
+        <div v-if="activityError" class="banner error">{{ activityError }}</div>
+        <div v-if="sourceNote(activity)" class="notice">{{ sourceNote(activity) }}</div>
+        <div v-if="activityLoading && !activity" class="loading-state"><span class="spinner"></span>Reading recent activity...</div>
+        <div v-else-if="activity && activity.available === false" class="empty-state">{{ activity.error || 'Activity data is unavailable.' }}</div>
+        <template v-else-if="activity && activity.available !== false">
+          <div class="stat-grid">
+            <div class="stat"><b>{{ activity.counts.merge }}</b><span>merges</span><small>last 24 hours</small></div>
+            <div class="stat"><b>{{ activity.counts.handoff }}</b><span>handoffs</span><small>last 24 hours</small></div>
+            <div class="stat"><b>{{ activity.counts.failure }}</b><span>failures</span><small>last 24 hours</small></div>
+            <div class="stat"><b>{{ activity.events.length }}</b><span>events</span><small>shown newest first</small></div>
+          </div>
+          <div class="toolbar filter-toolbar" style="margin-top: 12px;">
+            <div class="segmented">
+              <button v-for="filter in activityFilters" :key="filter.key" :class="{ active: activityFilter === filter.key }" @click="activityFilter = filter.key">{{ filter.label }}</button>
+            </div>
+            <span class="result-count">{{ filteredActivity.length }} shown</span>
+          </div>
+          <div v-if="!filteredActivity.length" class="empty-state">No matching activity in the last 24 hours.</div>
+          <div v-else class="timeline">
+            <article v-for="(event, index) in filteredActivity" :key="event.task_id + ':' + event.at + ':' + event.kind + ':' + index" class="timeline-item" :class="'kind-' + event.kind">
+              <div class="timeline-dot" aria-hidden="true"></div>
+              <div class="timeline-body">
+                <div class="timeline-top">
+                  <span class="badge" :class="activityBadge(event.kind)">{{ event.kind }}</span>
+                  <span class="muted">{{ event.project || 'unknown project' }} · {{ event.task_id }}</span>
+                  <span class="muted">{{ event.age_seconds != null ? ageLabel(event.age_seconds) + ' ago' : 'no time' }}</span>
+                </div>
+                <p>{{ cleanNote(event.note) }}</p>
+                <a v-if="event.url" :href="event.url" target="_blank" rel="noopener noreferrer">{{ event.url }}</a>
+              </div>
+            </article>
+          </div>
+        </template>
+      </section>
+      <section v-show="view === 'reviews'">
+        <div class="view-head">
+          <div>
+            <h1>Review boards</h1>
+            <p>Active visual review sessions, their pending prompts, layout issues, and original artifacts.</p>
+          </div>
+          <div class="view-actions">
+            <span class="muted" v-if="reviews">{{ reviews.active_count }} active · {{ reviews.pending_prompts }} queued prompts</span>
+            <button class="btn" :disabled="reviewsLoading" @click="loadReviews(true)">{{ reviewsLoading ? 'Reloading...' : 'Reload' }}</button>
+          </div>
+        </div>
+        <div v-if="reviewsError" class="banner error">{{ reviewsError }}</div>
+        <div v-if="sourceNote(reviews)" class="notice">{{ sourceNote(reviews) }}</div>
+        <div v-if="reviewsLoading && !reviews" class="loading-state"><span class="spinner"></span>Reading review boards...</div>
+        <div v-else-if="reviews && reviews.available === false" class="empty-state">{{ reviews.error || 'Review boards are unavailable.' }}</div>
+        <template v-else-if="reviews">
+          <div class="stat-grid">
+            <div class="stat"><b>{{ reviews.active_count }}</b><span>active boards</span></div>
+            <div class="stat"><b>{{ reviews.pending_prompts }}</b><span>queued prompts</span></div>
+            <div class="stat"><b>{{ reviewWarningCount }}</b><span>layout issues</span><small>open warnings</small></div>
+            <div class="stat"><b>{{ reviews.ended_count }}</b><span>ended</span><small>not shown</small></div>
+          </div>
+          <div v-if="!reviewSessions.length" class="empty-state" style="margin-top: 12px;">No active review boards.</div>
+          <div v-else class="review-grid" style="margin-top: 12px;">
+            <article v-for="session in reviewSessions" :key="session.key" class="review-card">
+              <div class="review-top">
+                <span class="badge" :class="session.status === 'feedback' ? 'warn' : 'ok'">{{ session.status }}</span>
+                <span class="muted">{{ session.project || 'unknown project' }}</span>
+                <span class="muted" v-if="session.updated_age_seconds != null">updated {{ ageLabel(session.updated_age_seconds) }} ago</span>
+              </div>
+              <h2>{{ session.title }}</h2>
+              <div class="mono muted wrap-any">{{ session.file }}</div>
+              <div class="review-facts">
+                <span v-if="session.pending_prompts">{{ session.pending_prompts }} queued prompt(s)</span>
+                <span v-if="session.layout_warnings">{{ session.layout_warnings }} layout issue(s)</span>
+                <span v-if="!session.artifact_exists" class="danger-text">artifact missing</span>
+              </div>
+              <div class="links" style="margin-top: 8px;">
+                <a v-if="session.url" :href="session.url" target="_blank" rel="noopener noreferrer">Open board</a>
+                <button v-if="taskFor(session.task_id)" class="link-button" @click="openWorker(session.task_id)">Open worker</button>
+              </div>
+            </article>
+          </div>
+        </template>
+      </section>
+
+      <section v-show="view === 'health'">
+        <div class="view-head">
+          <div>
+            <h1>Health</h1>
+            <p>Quota windows from quota-axi and free-model provider health from free-model-axi.</p>
+          </div>
+          <div class="view-actions">
+            <button class="btn" :disabled="quotaLoading || modelsLoading" @click="loadHealth(true)">{{ (quotaLoading || modelsLoading) ? 'Reloading...' : 'Reload' }}</button>
+          </div>
+        </div>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Quota</h2>
+            <span class="muted" v-if="quota && quota.generated">{{ formatIso(quota.generated) }}</span>
+          </div>
+          <div class="panel-body">
+            <div v-if="quotaError" class="banner error">{{ quotaError }}</div>
+            <div v-if="quotaLoading && !quota" class="loading-state"><span class="spinner"></span>Reading quota windows...</div>
+            <div v-else-if="quota && !quota.available" class="empty-state">{{ quota.error || 'Quota data is unavailable.' }}</div>
+            <template v-else-if="quota">
+              <div class="stat-grid">
+                <div class="stat"><b>{{ quota.counts.ok || 0 }}</b><span>ok</span></div>
+                <div class="stat"><b>{{ (quota.counts.critical || 0) + (quota.counts.tight || 0) }}</b><span>tight or critical</span></div>
+                <div class="stat"><b>{{ quota.counts.unavailable || 0 }}</b><span>unavailable</span></div>
+                <div class="stat"><b>{{ quota.counts.unknown || 0 }}</b><span>unknown</span></div>
+              </div>
+              <div v-if="!quota.providers.length" class="empty-state" style="margin-top: 12px;">No providers reported by quota-axi.</div>
+              <div v-else class="quota-grid" style="margin-top: 12px;">
+                <article v-for="provider in quota.providers" :key="provider.provider" class="quota-card" :class="'health-' + provider.health">
+                  <div class="quota-top">
+                    <h3>{{ provider.provider }}</h3>
+                    <span class="badge" :class="healthBadge(provider.health)">{{ provider.health }}</span>
+                  </div>
+                  <div class="muted">{{ provider.plan || 'plan unknown' }} · {{ provider.state.status || 'unknown' }}<span v-if="provider.state.stale"> · stale</span></div>
+                  <div v-if="provider.state.error" class="muted wrap-any">{{ provider.state.error }}</div>
+                  <div v-if="provider.windows.length" class="windows">
+                    <div v-for="window in provider.windows" :key="window.id" class="window">
+                      <div class="window-top"><span>{{ window.label || window.id }}</span><strong>{{ window.percent_remaining != null ? window.percent_remaining + '%' : 'unknown' }}</strong></div>
+                      <div class="progress" :class="percentTone(window.percent_remaining)"><span :style="{ width: (window.percent_remaining || 0) + '%' }"></span></div>
+                      <div class="muted">{{ window.resets_at ? 'resets ' + formatIso(window.resets_at) : 'reset unknown' }}<span v-if="window.pace"> · {{ window.pace.status }} ({{ window.pace.burnMultiple }}x)</span></div>
+                    </div>
+                  </div>
+                  <div v-else class="muted" style="margin-top: 8px;">No quota windows reported.</div>
+                  <div v-for="effective in provider.effective" :key="effective.scope" class="effective">
+                    <div class="muted">Effective: {{ effective.percent_remaining != null ? effective.percent_remaining + '%' : 'unknown' }}<span v-if="effective.runway.usable_seconds != null"> · runway {{ durationLabel(effective.runway.usable_seconds) }}</span></div>
+                    <div class="muted" v-if="effective.runway.projected_exhausted_at">projected exhaustion {{ formatIso(effective.runway.projected_exhausted_at) }}</div>
+                    <div class="muted" v-if="effective.spend_priority != null">spend priority {{ effective.spend_priority }}</div>
+                  </div>
+                </article>
+              </div>
+            </template>
+          </div>
+        </section>
+
+        <section class="panel" style="margin-top: 14px;">
+          <div class="panel-head">
+            <h2>Free models</h2>
+            <span class="muted" v-if="modelsAsOf">{{ modelsAsOf }}</span>
+          </div>
+          <div class="panel-body">
+            <div v-if="modelsError" class="banner error">{{ modelsError }}</div>
+            <div v-if="modelsLoading && !models" class="loading-state"><span class="spinner"></span>Reading free-model health...</div>
+            <div v-else-if="models && !models.available" class="empty-state">{{ models.error || 'Free-model data is unavailable.' }}</div>
+            <template v-else-if="models">
+              <div class="stat-grid">
+                <div class="stat"><b>{{ models.counts.providers || 0 }}</b><span>providers</span></div>
+                <div class="stat"><b>{{ models.counts.models || 0 }}</b><span>models</span></div>
+                <div class="stat"><b>{{ models.counts.healthy || 0 }}</b><span>healthy probes</span></div>
+                <div class="stat"><b>{{ models.counts.unhealthy || 0 }}</b><span>unhealthy probes</span></div>
+              </div>
+              <div v-if="!models.providers.length" class="empty-state" style="margin-top: 12px;">No provider health reported.</div>
+              <div v-else class="model-grid">
+                <article v-for="provider in models.providers" :key="provider.provider" class="model-card" :class="'health-' + provider.health">
+                  <div class="model-top">
+                    <h3>{{ provider.provider }}</h3>
+                    <span class="badge" :class="healthBadge(provider.health)">{{ provider.health }}</span>
+                  </div>
+                  <div class="muted">{{ provider.model_count }} models · {{ provider.healthy }} healthy · {{ provider.unhealthy }} unhealthy · {{ provider.unchecked }} unchecked<span v-if="provider.local"> · local</span></div>
+                  <div class="model-rows">
+                    <div v-for="model in provider.models" :key="model.model" class="model-row">
+                      <span class="model-name mono" :title="model.model">{{ shortModel(model.model) }}</span>
+                      <span class="badge" :class="healthBadge(model.health)">{{ model.health }}</span>
+                      <span class="muted">{{ model.latency_ms != null ? model.latency_ms + 'ms' : 'not probed' }}</span>
+                      <span class="muted">{{ model.context || 'ctx?' }}</span>
+                      <span class="muted">{{ model.price || 'price?' }}</span>
+                      <span v-if="model.thinking" class="badge soft">thinking</span>
+                      <span v-if="model.images" class="badge soft">images</span>
+                      <span v-if="model.remaining != null" class="muted">{{ model.remaining }}% left</span>
+                    </div>
+                  </div>
+                  <div class="muted" v-if="provider.model_count > provider.models.length" style="margin-top: 6px;">Showing {{ provider.models.length }} of {{ provider.model_count }} models.</div>
+                </article>
+              </div>
+            </template>
+          </div>
+        </section>
+      </section>
+
+      <section v-show="view === 'memories'" class="memories">
+        <div class="view-head">
+          <div>
+            <h1>Memories</h1>
+            <p>Captain preferences, shared preferences, and captured learnings from this home.</p>
+          </div>
+          <div class="view-actions">
+            <button class="btn" :disabled="memoriesLoading" @click="loadMemories(true)">{{ memoriesLoading ? 'Reloading...' : 'Reload' }}</button>
+          </div>
+        </div>
+        <div v-if="memoriesError" class="banner error">Memories failed: {{ memoriesError }}</div>
+        <div v-if="sourceNote(memories)" class="notice">{{ sourceNote(memories) }}</div>
+        <div v-if="memoriesLoading && !memories" class="loading-state"><span class="spinner"></span>Loading captain preferences and learnings...</div>
+        <div v-else-if="memories && memories.available === false" class="empty-state">{{ memories.error || 'Memories are unavailable.' }}</div>
+        <template v-else-if="memories">
+          <div v-for="file in memoryFiles" :key="file.key" class="memory">
+            <div class="memory-head">
+              <h2>{{ file.label }}</h2>
+              <span class="path">data/{{ file.name }}</span>
+              <span class="mtime">{{ file.present ? 'modified ' + formatDate(file.mtime) : 'not present' }}</span>
+            </div>
+            <div class="memory-body">
+              <div v-if="!file.present" class="memory-missing">This file is not present in this home.</div>
+              <template v-else>
+                <div class="toc" v-if="sectionsFor(file).length">
+                  <a v-for="section in sectionsFor(file)" :key="section.id" :href="'#' + anchor(file, section)" :style="section.level > 1 ? 'margin-left:' + Math.min(section.level - 1, 2) * 10 + 'px' : ''">{{ section.title }}</a>
+                </div>
+                <div class="doc">
+                  <section v-for="section in sectionsFor(file)" :key="section.id" :id="anchor(file, section)">
+                    <h1 v-if="section.level === 1">{{ section.title }}</h1>
+                    <h2 v-else-if="section.level === 2">{{ section.title }}</h2>
+                    <h3 v-else-if="section.level === 3">{{ section.title }}</h3>
+                    <h4 v-else>{{ section.title }}</h4>
+                    <div v-html="renderMarkdown(section.lines)"></div>
+                  </section>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+      </section>
+    </main>
+    <footer class="page-foot">
+      <span>Home: <code>{{ homePath }}</code></span>
+      <span>{{ dataAsOfLabel }} ({{ updatedAgeLabel || 'just now' }})</span>
+      <span v-if="staleData" class="warn">Stale: data is older than 3 minutes. The background refresher has not run.</span>
+    </footer>
+  </div>
+
+  <div v-if="drawerOpen" class="drawer-backdrop" @click="closeDrawer"></div>
+  <aside v-if="drawerOpen" class="drawer" role="dialog" aria-modal="true" aria-label="Worker detail">
+    <div class="drawer-head">
+      <div>
+        <h2>{{ drawerTitle }}</h2>
+        <p>{{ drawerSubtitle }}</p>
+      </div>
+      <button ref="drawerClose" class="drawer-close" aria-label="Close worker detail" @click="closeDrawer">×</button>
+    </div>
+    <div class="drawer-body">
+      <div v-if="drawerLoading" class="detail-loading"><span class="spinner"></span>Loading worker detail...</div>
+      <div v-else-if="drawerError" class="banner error">{{ drawerError }}</div>
+      <template v-else-if="drawerDetail">
+        <div class="drawer-section">
+          <h3>Summary</h3>
+          <div class="drawer-kv">
+            <span class="detail-label">Task</span><span class="mono wrap-any">{{ drawerDetail.id }}</span>
+            <span class="detail-label">Project</span><span>{{ drawerDetail.task.project_name || drawerDetail.meta.project || 'unknown' }}</span>
+            <span class="detail-label">State</span><span><span class="chip" :class="drawerStateTone">{{ drawerDetail.task.state || 'unknown' }}</span></span>
+            <span class="detail-label">Worker</span><span>{{ drawerDetail.task.harness || 'unknown' }} · {{ drawerDetail.task.model || 'model not recorded' }}<span v-if="drawerDetail.meta.effort"> · {{ drawerDetail.meta.effort }}</span></span>
+            <span class="detail-label">Delivery</span><span>{{ drawerDetail.meta.mode || drawerDetail.meta.yolo || 'not recorded' }}</span>
+            <span class="detail-label">Branch</span><span class="mono wrap-any">{{ drawerDetail.meta.branch || 'no branch recorded' }}</span>
+            <span class="detail-label">Endpoint</span><span>{{ drawerDetail.task.endpoint_status || 'unknown' }}</span>
+            <span class="detail-label">Project path</span><span class="mono wrap-any">{{ drawerDetail.meta.project || 'not recorded' }}</span>
+          </div>
+        </div>
+
+        <div class="drawer-section" v-if="drawerDetail.latest.blocked || drawerDetail.latest.needs_decision || drawerDetail.latest.paused">
+          <h3>Current block or pause</h3>
+          <div class="detail-grid">
+            <div class="detail-row" v-if="drawerDetail.latest.blocked">
+              <span class="detail-label">Blocked</span>
+              <div class="detail-value">
+                <div class="detail-note">{{ cleanNote(drawerDetail.latest.blocked.note) }}</div>
+                <div class="detail-meta">
+                  <span v-if="drawerDetail.latest.blocked.key">Key <code>{{ drawerDetail.latest.blocked.key }}</code></span>
+                  <span>{{ ageLabel(drawerDetail.latest.blocked.age_seconds + secondsSinceSnapshot()) }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="detail-row" v-if="drawerDetail.latest.needs_decision">
+              <span class="detail-label">Needs decision</span>
+              <div class="detail-value">
+                <div class="detail-note">{{ cleanNote(drawerDetail.latest.needs_decision.note) }}</div>
+                <div class="detail-meta">
+                  <span v-if="drawerDetail.decision.key">Key <code>{{ drawerDetail.decision.key }}</code></span>
+                  <span v-if="drawerDetail.decision.age_seconds != null">{{ ageLabel(drawerDetail.decision.age_seconds + secondsSinceSnapshot()) }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="detail-row" v-if="drawerDetail.latest.paused">
+              <span class="detail-label">Paused / parked</span>
+              <div class="detail-value">
+                <div class="detail-note">{{ cleanNote(drawerDetail.latest.paused.note) }}</div>
+                <div class="detail-meta">
+                  <span v-if="drawerDetail.paused_until">Until <strong>{{ drawerDetail.paused_until }}</strong></span>
+                  <span v-else>No until-time recorded</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="drawer-section" v-if="drawerDetail.waiting_on || drawerDetail.paused_until || (drawerDetail.backlog && (drawerDetail.backlog.hold_reason || drawerDetail.backlog.hold_until))">
+          <h3>Waiting and holds</h3>
+          <div class="detail-grid">
+            <div class="detail-row" v-if="drawerDetail.waiting_on">
+              <span class="detail-label">Waiting on</span>
+              <div class="detail-value">{{ drawerDetail.waiting_on }}</div>
+            </div>
+            <div class="detail-row" v-if="drawerDetail.paused_until">
+              <span class="detail-label">Paused until</span>
+              <div class="detail-value">{{ drawerDetail.paused_until }}</div>
+            </div>
+            <div class="detail-row" v-if="drawerDetail.backlog && (drawerDetail.backlog.hold_reason || drawerDetail.backlog.hold_until)">
+              <span class="detail-label">Backlog hold</span>
+              <div class="detail-value">
+                <div class="detail-note">{{ drawerDetail.backlog.hold_reason || 'No hold reason recorded.' }}</div>
+                <div class="detail-meta"><span>Hold until: {{ drawerDetail.backlog.hold_until || 'no hold date' }}</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="drawer-section">
+          <h3>Recent status events</h3>
+          <div class="detail-value">
+            <div v-for="(event, index) in drawerDetail.recent_events" :key="index" class="event-line">
+              <div class="event-top">
+                <span class="event-state">{{ event.state || 'event' }}</span>
+                <span class="event-age">{{ event.age_seconds != null ? ageLabel(event.age_seconds + secondsSinceSnapshot()) : 'no time' }}</span>
+                <span v-if="event.key" class="event-age">key {{ event.key }}</span>
+              </div>
+              <div class="event-note">{{ cleanNote(event.note) }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="drawer-section">
+          <h3>Links</h3>
+          <div class="detail-links">
+            <a v-if="drawerDetail.links.pr" :href="drawerDetail.links.pr" target="_blank" rel="noopener noreferrer">Pull request</a>
+            <a v-if="drawerDetail.links.report" :href="drawerDetail.links.report" target="_blank" rel="noopener noreferrer">Report</a>
+            <a v-if="drawerDetail.links.board" :href="drawerDetail.links.board" target="_blank" rel="noopener noreferrer">Review board</a>
+            <a v-else-if="drawerDetail.links.link" :href="drawerDetail.links.link" target="_blank" rel="noopener noreferrer">Link</a>
+            <span v-if="!drawerDetail.links.pr && !drawerDetail.links.report && !drawerDetail.links.board && !drawerDetail.links.link" class="muted">No links recorded.</span>
+          </div>
+        </div>
+      </template>
+    </div>
+  </aside>
+</div>
+<script>
+const { createApp } = Vue;
+
+const COLUMN_DEFS = [
+  { key: 'working', label: 'Working' },
+  { key: 'blocked', label: 'Blocked / needs decision' },
+  { key: 'parked', label: 'Parked' },
+  { key: 'done', label: 'Done / ready' },
+  { key: 'other', label: 'Other' },
+];
+
+const STATE_LABELS = {
+  working: 'Working',
+  blocked: 'Blocked',
+  'needs-decision': 'Needs decision',
+  'needs_decision': 'Needs decision',
+  paused: 'Paused',
+  parked: 'Parked',
+  done: 'Done',
+  failed: 'Failed',
+  unknown: 'Unknown',
+};
+
+const NAV_SECTIONS = [
+  { label: 'Fleet', items: [
+    { key: 'board', label: 'Board' },
+    { key: 'decisions', label: 'Decisions' },
+    { key: 'prs', label: 'Pull requests' },
+    { key: 'workers', label: 'Workers' },
+  ] },
+  { label: 'Operations', items: [
+    { key: 'fleet', label: 'Fleet' },
+    { key: 'backlog', label: 'Backlog' },
+    { key: 'activity', label: 'Activity' },
+    { key: 'reviews', label: 'Review boards' },
+  ] },
+  { label: 'Knowledge', items: [
+    { key: 'health', label: 'Health' },
+    { key: 'memories', label: 'Memories' },
+  ] },
+];
+
+const FLAT_NAV = NAV_SECTIONS.flatMap((section) => section.items);
+const VALID_VIEWS = new Set(FLAT_NAV.map((item) => item.key));
+
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+createApp({
+  data() {
+    return {
+      view: 'board',
+      snapshot: null,
+      snapshotError: null,
+      meta: null,
+      loading: false,
+      lastUpdated: null,
+      taskDetails: null,
+      taskDetailsLoading: false,
+      taskDetailsPromise: null,
+      detailLoadError: null,
+      now: Date.now(),
+      search: '',
+      projectFilter: 'all',
+      memories: null,
+      memoriesError: null,
+      memoriesLoading: false,
+      decisions: null,
+      decisionsError: null,
+      decisionsLoading: false,
+      prs: null,
+      prsError: null,
+      prsLoading: false,
+      prFilter: 'open',
+      stuck: null,
+      stuckError: null,
+      stuckLoading: false,
+      capacity: null,
+      capacityError: null,
+      capacityLoading: false,
+      away: null,
+      matePanels: [],
+      secondmatesSource: null,
+      secondmatesError: null,
+      secondmatesLoading: false,
+      backlog: null,
+      backlogError: null,
+      backlogLoading: false,
+      backlogFilter: 'all',
+      activity: null,
+      activityError: null,
+      activityLoading: false,
+      activityFilter: 'all',
+      reviews: null,
+      reviewsError: null,
+      reviewsLoading: false,
+      quota: null,
+      quotaError: null,
+      quotaLoading: false,
+      models: null,
+      modelsError: null,
+      modelsLoading: false,
+      details: {},
+      detailLoading: {},
+      detailErrors: {},
+      expandedCards: {},
+      drawerOpen: false,
+      drawerTaskId: null,
+      drawerDetail: null,
+      drawerLoading: false,
+      drawerError: null,
+      loadedViews: { board: true },
+      ticker: null,
+      refresher: null,
+    };
+  },
+  computed: {
+    tasks() {
+      if (!this.snapshot || !Array.isArray(this.snapshot.tasks)) return [];
+      return this.snapshot.tasks.slice().sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    },
+    filteredTasks() {
+      const search = this.search.trim().toLowerCase();
+      return this.tasks.filter((task) => {
+        if (this.projectFilter !== 'all' && this.projectName(task) !== this.projectFilter) return false;
+        if (!search) return true;
+        const haystack = [
+          task.id,
+          this.shortTitle(task),
+          this.projectName(task),
+          task.branch,
+          this.latestLine(task),
+          task.kind,
+        ].filter(Boolean).join(' ').toLowerCase();
+        return haystack.indexOf(search) !== -1;
+      });
+    },
+    boardColumns() {
+      const buckets = new Map(COLUMN_DEFS.map((column) => [column.key, { ...column, tasks: [] }]));
+      this.filteredTasks.forEach((task) => {
+        const bucket = buckets.get(this.columnKey(task)) || buckets.get('other');
+        bucket.tasks.push(task);
+      });
+      for (const bucket of buckets.values()) {
+        bucket.tasks.sort((a, b) => {
+          const aa = this.activitySeconds(a);
+          const ab = this.activitySeconds(b);
+          if (aa !== ab) return aa < ab ? -1 : 1;
+          return String(a.id).localeCompare(String(b.id));
+        });
+      }
+      return COLUMN_DEFS.map((column) => buckets.get(column.key)).filter((column) => column.tasks.length > 0);
+    },
+    projectNames() {
+      const seen = new Set();
+      this.tasks.forEach((task) => seen.add(this.projectName(task)));
+      return Array.from(seen).filter(Boolean).sort();
+    },
+    counts() {
+      let working = 0;
+      let attention = 0;
+      this.tasks.forEach((task) => {
+        const tone = this.stateTone(task);
+        if (tone === 'working') working += 1;
+        if (tone === 'blocked') attention += 1;
+      });
+      return { working, attention };
+    },
+    filtersActive() {
+      return !!this.search.trim() || this.projectFilter !== 'all';
+    },
+    dataAsOfLabel() {
+      const generated = (this.meta && this.meta.generated) || (this.snapshot && this.snapshot.generated);
+      if (!generated) return 'Data as of unknown';
+      return 'Data as of ' + this.formatIso(generated);
+    },
+    staleData() {
+      const generated = (this.meta && this.meta.generated) || (this.snapshot && this.snapshot.generated);
+      if (!generated) return false;
+      const epoch = (function(v){ if(!v) return null; const d=new Date(String(v).replace('Z','+00:00')); return Number.isNaN(d.getTime())?null:Math.floor(d.getTime()/1000); })(generated);
+      if (!epoch) return false;
+      return (Date.now() - epoch * 1000) > 3 * 60 * 1000;
+    },
+    updatedAgeLabel() {
+      const generated = (this.meta && this.meta.generated) || (this.snapshot && this.snapshot.generated);
+      if (!generated) return '';
+      const epoch = (function(v){ if(!v) return null; const d=new Date(String(v).replace('Z','+00:00')); return Number.isNaN(d.getTime())?null:Math.floor(d.getTime()/1000); })(generated);
+      if (!epoch) return '';
+      return this.ageLabel((Date.now() - epoch * 1000) / 1000) + ' ago';
+    },
+    homePath() {
+      return (this.meta && this.meta.home) || 'unknown home';
+    },
+    refreshCommand() {
+      return (this.meta && this.meta.refresh_command) || 'fm-fleet-ui (auto-refresh 60s)';
+    },
+    refreshHint() {
+      const command = (this.meta && this.meta.refresh_command) || 'fm-fleet-ui (auto-refresh 60s)';
+      return 'Refresh: ' + command + ', then Reload';
+    },
+    memoryFiles() {
+      return (this.memories && this.memories.files) || [];
+    },
+    navSections() {
+      return NAV_SECTIONS;
+    },
+    flatNavItems() {
+      return FLAT_NAV;
+    },
+    decisionCount() {
+      if (this.decisions) return this.decisions.count || 0;
+      return this.tasks.reduce((total, task) => {
+        const open = (task.hints && task.hints.open_decisions) || [];
+        return total + open.length;
+      }, 0);
+    },
+    decisionList() {
+      return (this.decisions && this.decisions.decisions) || [];
+    },
+    stuckCount() {
+      return (this.stuck && this.stuck.count) || 0;
+    },
+    stuckAlerts() {
+      return (this.stuck && this.stuck.alerts) || [];
+    },
+    openPrCount() {
+      if (this.prs && this.prs.counts) return this.prs.counts.open || 0;
+      const urls = new Set();
+      this.tasks.forEach((task) => {
+        const url = this.prUrl(task);
+        if (url) urls.add(url);
+      });
+      return urls.size;
+    },
+    prReadyCount() {
+      return (this.prs && this.prs.counts && this.prs.counts.ready) || 0;
+    },
+    prFailingCount() {
+      if (!this.prs || !this.prs.counts) return 0;
+      return (this.prs.counts.failing || 0) + (this.prs.counts.conflict || 0);
+    },
+    filteredPrs() {
+      const rows = (this.prs && this.prs.prs) || [];
+      if (this.prFilter === 'all') return rows;
+      return rows.filter((pr) => pr.state === 'open');
+    },
+    workerTasks() {
+      const order = { blocked: 0, working: 1, parked: 2, other: 3, done: 4 };
+      return this.tasks.slice().sort((a, b) => {
+        const difference = order[this.columnKey(a)] - order[this.columnKey(b)];
+        if (difference !== 0) return difference;
+        const aa = this.activitySeconds(a);
+        const ab = this.activitySeconds(b);
+        if (aa !== ab) return aa < ab ? -1 : 1;
+        return String(a.id).localeCompare(String(b.id));
+      });
+    },
+    awayPresent() {
+      return !!(this.away && this.away.away && this.away.away.present);
+    },
+    awayLabel() {
+      if (!this.awayPresent) return 'Present';
+      return this.away.away.mode === 'quiet' ? 'Quiet mode' : 'Away';
+    },
+    awayTone() {
+      if (!this.awayPresent) return 'present';
+      return this.away.away.mode === 'quiet' ? 'quiet' : 'away';
+    },
+    awayDot() {
+      return this.awayPresent ? 'busy' : '';
+    },
+    awayTitle() {
+      if (!this.awayPresent) return 'No away or quiet record is active.';
+      const age = this.away.away.age_seconds;
+      return 'Entered ' + (age != null ? this.ageLabel(age) : 'recently') + '.';
+    },
+    queueCount() {
+      return (this.away && this.away.wake_queue && this.away.wake_queue.count) || 0;
+    },
+    queueKinds() {
+      const kinds = (this.away && this.away.wake_queue && this.away.wake_queue.kinds) || {};
+      const entries = Object.entries(kinds);
+      if (!entries.length) return 'none';
+      return entries.map(([kind, count]) => kind + ' ' + count).join(' · ');
+    },
+    capacityReasons() {
+      const verdict = this.capacity && this.capacity.summary && this.capacity.summary.verdict;
+      if (!verdict || !Array.isArray(verdict.reasons) || !verdict.reasons.length) return '';
+      return verdict.reasons.join('; ');
+    },
+    capacityAdmitLabel() {
+      const verdict = this.capacity && this.capacity.summary && this.capacity.summary.verdict;
+      if (!verdict) return 'unknown';
+      if (verdict.admit) {
+        return verdict.free_lanes != null ? 'admit · ' + verdict.free_lanes + ' free lanes' : 'admit';
+      }
+      return 'not admitting' + (verdict.free_lanes != null ? ' · ' + verdict.free_lanes + ' free lanes' : '');
+    },
+    diskLabel() {
+      const disks = this.capacity && this.capacity.capacity && this.capacity.capacity.pressure && this.capacity.capacity.pressure.disks;
+      if (!Array.isArray(disks) || !disks.length) return 'unknown';
+      return disks.map((disk) => (disk.label || 'disk') + ': ' + (disk.free_gb != null ? disk.free_gb + ' GB free' : 'unknown')).join(' · ');
+    },
+    ramTone() {
+      const value = this.capacity && this.capacity.summary && this.capacity.summary.ram_free_pct;
+      if (value == null) return 'ok';
+      if (value <= 10) return 'low';
+      if (value <= 25) return 'mid';
+      return 'ok';
+    },
+    backlogFilters() {
+      const records = (this.backlog && this.backlog.records) || [];
+      const count = (bucket) => records.filter((item) => item.bucket === bucket).length;
+      return [
+        { key: 'all', label: 'All', count: records.length },
+        { key: 'queued', label: 'Queued', count: count('queued') },
+        { key: 'held', label: 'Held', count: count('held') },
+        { key: 'blocked', label: 'Blocked', count: count('blocked') },
+        { key: 'in_flight', label: 'In flight', count: count('in_flight') },
+      ];
+    },
+    filteredBacklog() {
+      const records = (this.backlog && this.backlog.records) || [];
+      if (this.backlogFilter === 'all') return records;
+      return records.filter((item) => item.bucket === this.backlogFilter);
+    },
+    activityFilters() {
+      const counts = (this.activity && this.activity.counts) || {};
+      return [
+        { key: 'all', label: 'All' },
+        { key: 'merge', label: 'Merges (' + (counts.merge || 0) + ')' },
+        { key: 'handoff', label: 'Handoffs (' + (counts.handoff || 0) + ')' },
+        { key: 'failure', label: 'Failures (' + (counts.failure || 0) + ')' },
+      ];
+    },
+    filteredActivity() {
+      const events = (this.activity && this.activity.events) || [];
+      if (this.activityFilter === 'all') return events;
+      return events.filter((event) => event.kind === this.activityFilter);
+    },
+    reviewSessions() {
+      return (this.reviews && this.reviews.sessions) || [];
+    },
+    reviewWarningCount() {
+      return this.reviewSessions.reduce((total, session) => total + (session.layout_warnings || 0), 0);
+    },
+    modelsAsOf() {
+      const asOf = this.models && this.models.as_of;
+      if (!asOf) return '';
+      if (typeof asOf === 'string') return 'As of ' + asOf;
+      const parts = [asOf.local_time, asOf.age].filter(Boolean);
+      if (asOf.stale) parts.push('stale');
+      return parts.length ? parts.join(' · ') : '';
+    },
+    healthAlertCount() {
+      let count = 0;
+      if (this.quota && this.quota.counts) {
+        count += (this.quota.counts.critical || 0) + (this.quota.counts.tight || 0);
+      }
+      if (this.models && Array.isArray(this.models.providers)) {
+        count += this.models.providers.filter((provider) => provider.health === 'unhealthy').length;
+      }
+      return count;
+    },
+    secondmateCount() {
+      const current = this.snapshot && this.snapshot.secondmate_current;
+      if (current && typeof current.total === 'number') return current.total;
+      return this.tasks.filter((task) => task.kind === 'secondmate').length;
+    },
+    snapshotBacklogOpen() {
+      const backlog = this.snapshot && this.snapshot.backlog;
+      if (!backlog || !Array.isArray(backlog.records)) return 0;
+      return backlog.records.filter((record) => record.state !== 'done').length;
+    },
+    drawerTitle() {
+      if (this.drawerDetail) return this.drawerDetail.task.title || this.drawerDetail.id;
+      return this.drawerTaskId || 'Worker detail';
+    },
+    drawerSubtitle() {
+      if (!this.drawerDetail) return this.drawerTaskId || '';
+      return [
+        this.drawerDetail.task.project_name,
+        this.drawerDetail.id,
+        this.drawerDetail.task.state,
+      ].filter(Boolean).join(' · ');
+    },
+    drawerStateTone() {
+      if (!this.drawerDetail) return 'other';
+      return this.stateTone(this.drawerDetail.task);
+    },
+  },
+  methods: {
+    async fetchJson(name, label) {
+      const url = name.indexOf('data/') === 0 || name.indexOf('reports/') === 0 ? name : 'data/' + name;
+      let response;
+      try {
+        response = await fetch(url, { cache: 'no-store' });
+      } catch (error) {
+        throw new Error(this.dataError());
+      }
+      if (!response.ok) {
+        throw new Error('Data unavailable for ' + label + '. Run fm-fleet-ui (auto-refresh 60s), then Reload.');
+      }
+      try {
+        return await response.json();
+      } catch (error) {
+        throw new Error('Data for ' + label + ' is not valid JSON. Run fm-fleet-ui (auto-refresh 60s) again.');
+      }
+    },
+    dataError() {
+      return 'Data unavailable. Run fm-fleet-ui (auto-refresh 60s), then Reload.';
+    },
+    onVisibility() {
+      if (!document.hidden) this.refreshSnapshot();
+    },
+    sourceNote(payload) {
+      if (!payload) return '';
+      if (payload.available === false) {
+        return payload.error || payload.note || 'This panel was unavailable in the last build.';
+      }
+      if (payload.stale === true) {
+        return payload.note || 'This panel is stale in the last build.';
+      }
+      return '';
+    },
+    setView(view) {
+      if (!VALID_VIEWS.has(view)) view = 'board';
+      this.view = view;
+      if (window.history && window.history.replaceState) {
+        const base = window.location.pathname + window.location.search;
+        window.history.replaceState(null, '', base + (view === 'board' ? '' : '#' + view));
+      }
+      if (this.drawerOpen) this.closeDrawer();
+      this.loadView(view);
+      window.scrollTo(0, 0);
+    },
+    navCount(key) {
+      if (key === 'decisions') return this.decisionCount;
+      if (key === 'prs') return this.openPrCount;
+      if (key === 'workers') return this.stuckCount;
+      if (key === 'fleet') return this.matePanels.length || this.secondmateCount;
+      if (key === 'backlog') {
+        if (this.backlog && this.backlog.counts) {
+          return (this.backlog.counts.queued || 0) + (this.backlog.counts.held || 0) + (this.backlog.counts.blocked || 0) + (this.backlog.counts.in_flight || 0);
+        }
+        return this.snapshotBacklogOpen;
+      }
+      if (key === 'reviews') return (this.reviews && this.reviews.active_count) || 0;
+      if (key === 'health') return this.healthAlertCount;
+      return 0;
+    },
+    async refreshAll() {
+      if (this.loading) return;
+      this.loadedViews = { board: true };
+      const expanded = Object.keys(this.expandedCards || {});
+      this.taskDetails = null;
+      this.taskDetailsPromise = null;
+      await this.refreshSnapshot();
+      await this.loadView(this.view, true);
+      if (expanded.length) await this.loadTaskDetails(true);
+      this.loadAway();
+      this.loadReviews();
+    },
+    async refreshSnapshot() {
+      if (this.loading) return;
+      this.loading = true;
+      this.snapshotError = null;
+      try {
+        this.meta = await this.fetchJson('meta.json', 'build metadata').catch(() => null);
+        this.snapshot = await this.fetchJson('snapshot.json', 'snapshot');
+        this.lastUpdated = Date.now();
+        this.loadStuck();
+        if (this.loadedViews.decisions && this.view === 'decisions') this.loadDecisions();
+        if (this.loadedViews.backlog && this.view === 'backlog') this.loadBacklog();
+        if (this.loadedViews.fleet && this.view === 'fleet') this.loadSecondmates();
+      } catch (error) {
+        this.snapshotError = error && error.message ? error.message : String(error);
+      } finally {
+        this.loading = false;
+      }
+    },
+    async loadView(view, force) {
+      if (!VALID_VIEWS.has(view)) view = 'board';
+      if (!force && this.loadedViews[view]) return;
+      if (view === 'decisions') await this.loadDecisions(force);
+      else if (view === 'prs') await this.loadPrs(force);
+      else if (view === 'workers') await this.loadStuck(force);
+      else if (view === 'fleet') await this.loadFleet(force);
+      else if (view === 'backlog') await this.loadBacklog(force);
+      else if (view === 'activity') await this.loadActivity(force);
+      else if (view === 'reviews') await this.loadReviews(force);
+      else if (view === 'health') await this.loadHealth(force);
+      else if (view === 'memories') await this.loadMemories(force);
+      this.loadedViews = Object.assign({}, this.loadedViews, { [view]: true });
+    },
+    async loadDecisions(force) {
+      if (this.decisionsLoading) return;
+      if (this.decisions && !force) return;
+      this.decisionsLoading = true;
+      this.decisionsError = null;
+      try {
+        this.decisions = await this.fetchJson('decisions.json', 'decisions');
+      } catch (error) {
+        this.decisionsError = error && error.message ? error.message : String(error);
+      } finally {
+        this.decisionsLoading = false;
+      }
+    },
+    async loadPrs(force) {
+      if (this.prsLoading) return;
+      if (this.prs && !force) return;
+      this.prsLoading = true;
+      this.prsError = null;
+      try {
+        this.prs = await this.fetchJson('prs.json', 'pull requests');
+      } catch (error) {
+        this.prsError = error && error.message ? error.message : String(error);
+      } finally {
+        this.prsLoading = false;
+      }
+    },
+    async loadStuck(force) {
+      if (this.stuckLoading) return;
+      if (this.stuck && !force) return;
+      this.stuckLoading = true;
+      this.stuckError = null;
+      try {
+        this.stuck = await this.fetchJson('stuck.json', 'stuck workers');
+      } catch (error) {
+        this.stuckError = error && error.message ? error.message : String(error);
+      } finally {
+        this.stuckLoading = false;
+      }
+    },
+    async loadFleet(force) {
+      await Promise.all([
+        this.loadCapacity(force),
+        this.loadAway(force),
+        this.loadSecondmates(force),
+      ]);
+    },
+    async loadCapacity(force) {
+      if (this.capacityLoading) return;
+      if (this.capacity && !force) return;
+      this.capacityLoading = true;
+      this.capacityError = null;
+      try {
+        this.capacity = await this.fetchJson('capacity.json', 'capacity');
+      } catch (error) {
+        this.capacityError = error && error.message ? error.message : String(error);
+      } finally {
+        this.capacityLoading = false;
+      }
+    },
+    async loadAway(force) {
+      if (this.away && !force) return;
+      try {
+        this.away = await this.fetchJson('away.json', 'away posture');
+      } catch (error) {
+        this.away = null;
+      }
+    },
+    async loadSecondmates(force) {
+      if (this.secondmatesLoading) return;
+      if (this.matePanels.length && !force) return;
+      this.secondmatesLoading = true;
+      this.secondmatesError = null;
+      try {
+        const payload = await this.fetchJson('secondmates.json', 'secondmates');
+        this.secondmatesSource = payload;
+        this.matePanels = payload.secondmates || [];
+      } catch (error) {
+        this.secondmatesError = error && error.message ? error.message : String(error);
+      } finally {
+        this.secondmatesLoading = false;
+      }
+    },
+    async loadBacklog(force) {
+      if (this.backlogLoading) return;
+      if (this.backlog && !force) return;
+      this.backlogLoading = true;
+      this.backlogError = null;
+      try {
+        this.backlog = await this.fetchJson('backlog.json', 'backlog');
+      } catch (error) {
+        this.backlogError = error && error.message ? error.message : String(error);
+      } finally {
+        this.backlogLoading = false;
+      }
+    },
+    async loadActivity(force) {
+      if (this.activityLoading) return;
+      if (this.activity && !force) return;
+      this.activityLoading = true;
+      this.activityError = null;
+      try {
+        this.activity = await this.fetchJson('activity.json', 'activity');
+      } catch (error) {
+        this.activityError = error && error.message ? error.message : String(error);
+      } finally {
+        this.activityLoading = false;
+      }
+    },
+    async loadReviews(force) {
+      if (this.reviewsLoading) return;
+      if (this.reviews && !force) return;
+      this.reviewsLoading = true;
+      this.reviewsError = null;
+      try {
+        this.reviews = await this.fetchJson('reviews.json', 'review boards');
+      } catch (error) {
+        this.reviewsError = error && error.message ? error.message : String(error);
+      } finally {
+        this.reviewsLoading = false;
+      }
+    },
+    async loadQuota(force) {
+      if (this.quotaLoading) return;
+      if (this.quota && !force) return;
+      this.quotaLoading = true;
+      this.quotaError = null;
+      try {
+        this.quota = await this.fetchJson('quota.json', 'quota');
+      } catch (error) {
+        this.quotaError = error && error.message ? error.message : String(error);
+      } finally {
+        this.quotaLoading = false;
+      }
+    },
+    async loadModels(force) {
+      if (this.modelsLoading) return;
+      if (this.models && !force) return;
+      this.modelsLoading = true;
+      this.modelsError = null;
+      try {
+        this.models = await this.fetchJson('models.json', 'free models');
+      } catch (error) {
+        this.modelsError = error && error.message ? error.message : String(error);
+      } finally {
+        this.modelsLoading = false;
+      }
+    },
+    async loadHealth(force) {
+      await Promise.all([this.loadQuota(force), this.loadModels(force)]);
+    },
+    async loadMemories(force) {
+      if (this.memoriesLoading) return;
+      if (this.memories && !force) return;
+      this.memoriesLoading = true;
+      this.memoriesError = null;
+      try {
+        this.memories = await this.fetchJson('memories.json', 'memories');
+      } catch (error) {
+        this.memoriesError = error && error.message ? error.message : String(error);
+      } finally {
+        this.memoriesLoading = false;
+      }
+    },
+    async loadTaskDetails(force) {
+      if (this.taskDetails && !force) return this.taskDetails;
+      if (this.taskDetailsPromise) return this.taskDetailsPromise;
+      this.taskDetailsLoading = true;
+      this.detailLoadError = null;
+      this.taskDetailsPromise = this.fetchJson('task-details.json', 'task details')
+        .then((payload) => {
+          this.taskDetails = payload;
+          this.details = Object.assign({}, this.details, payload.details || {});
+          return payload;
+        })
+        .catch((error) => {
+          this.detailLoadError = error && error.message ? error.message : String(error);
+          return null;
+        })
+        .finally(() => {
+          this.taskDetailsLoading = false;
+          this.taskDetailsPromise = null;
+        });
+      return this.taskDetailsPromise;
+    },
+    async loadDetail(id, force) {
+      if (!id) return null;
+      if (this.details[id] && !force) return this.details[id];
+      this.detailLoading = Object.assign({}, this.detailLoading, { [id]: true });
+      this.detailErrors = Object.assign({}, this.detailErrors, { [id]: null });
+      try {
+        await this.loadTaskDetails(force);
+        const detail = this.details[id] || null;
+        if (!detail) {
+          throw new Error(this.detailLoadError || 'No detail was recorded for this task in the last build.');
+        }
+        return detail;
+      } catch (error) {
+        this.detailErrors = Object.assign({}, this.detailErrors, { [id]: error && error.message ? error.message : String(error) });
+        return null;
+      } finally {
+        this.detailLoading = Object.assign({}, this.detailLoading, { [id]: false });
+      }
+    },
+    async toggleExpand(task) {
+      const id = task && task.id;
+      if (!id) return;
+      const next = Object.assign({}, this.expandedCards);
+      if (next[id]) {
+        delete next[id];
+        this.expandedCards = next;
+        return;
+      }
+      next[id] = true;
+      this.expandedCards = next;
+      await this.loadDetail(id);
+    },
+    expandable(task) {
+      const tone = this.columnKey(task);
+      return tone === 'blocked' || tone === 'parked';
+    },
+    async openWorker(id) {
+      if (!id) return;
+      this.drawerOpen = true;
+      this.drawerTaskId = id;
+      this.drawerDetail = this.details[id] || null;
+      this.drawerError = null;
+      this.drawerLoading = !this.drawerDetail;
+      document.body.style.overflow = 'hidden';
+      this.$nextTick(() => {
+        if (this.$refs.drawerClose) this.$refs.drawerClose.focus();
+      });
+      if (!this.drawerDetail) {
+        await this.loadDetail(id);
+        this.drawerDetail = this.details[id] || null;
+        this.drawerError = this.detailErrors[id] || (this.drawerDetail ? null : 'Could not load worker detail.');
+        this.drawerLoading = false;
+      }
+    },
+    closeDrawer() {
+      this.drawerOpen = false;
+      this.drawerTaskId = null;
+      this.drawerDetail = null;
+      this.drawerError = null;
+      this.drawerLoading = false;
+      document.body.style.overflow = '';
+    },
+    onKeydown(event) {
+      if (event.key === 'Escape' && this.drawerOpen) {
+        event.preventDefault();
+        this.closeDrawer();
+      }
+    },
+    viewFromHash() {
+      const hash = String(window.location.hash || '').replace(/^#/, '');
+      return VALID_VIEWS.has(hash) ? hash : 'board';
+    },
+    clearFilters() {
+      this.search = '';
+      this.projectFilter = 'all';
+    },
+    projectName(task) {
+      if (!task) return '';
+      const project = task.project || '';
+      const cleaned = project.replace(/[\\/]+$/, '');
+      const base = cleaned.split(/[\\/]/).pop();
+      return base || (task.backlog && task.backlog.repo) || 'unknown';
+    },
+    shortTitle(task) {
+      if (!task) return '';
+      const raw = (task.backlog && task.backlog.title) || task.id || 'Untitled task';
+      return raw.split(' (repo:')[0].trim();
+    },
+    cleanNote(value) {
+      let text = String(value == null ? '' : value);
+      text = text.replace(/(^|[ \t])(?:corr|pending-reply)=[A-Za-z0-9._:-]+(?=[ \t]|$)/gi, '$1');
+      return text.replace(/[ \t]{2,}/g, ' ').trim();
+    },
+    latestLine(task) {
+      const last = task.paths && task.paths.status_log && task.paths.status_log.last_event;
+      if (last && last.note) return this.cleanNote(last.note);
+      if (task.current_state && task.current_state.detail) return this.cleanNote(task.current_state.detail);
+      if (task.current_state && task.current_state.raw) return this.cleanNote(task.current_state.raw);
+      return 'No reported activity line.';
+    },
+    latestAge(task) {
+      const last = task.paths && task.paths.status_log && task.paths.status_log.last_event;
+      if (last && typeof last.age_seconds === 'number' && last.age_seconds >= 0) {
+        return this.ageLabel(last.age_seconds + this.secondsSinceSnapshot());
+      }
+      return 'no timestamp';
+    },
+    activitySeconds(task) {
+      const last = task.paths && task.paths.status_log && task.paths.status_log.last_event;
+      if (last && typeof last.age_seconds === 'number' && last.age_seconds >= 0) {
+        return last.age_seconds + this.secondsSinceSnapshot();
+      }
+      return Number.POSITIVE_INFINITY;
+    },
+    secondsSinceSnapshot() {
+      if (!this.snapshot || !this.snapshot.generated) return 0;
+      const generated = Date.parse(this.snapshot.generated);
+      if (!isFinite(generated)) return 0;
+      return Math.max(0, (this.now - generated) / 1000);
+    },
+    ageLabel(seconds) {
+      if (!isFinite(seconds)) return 'unknown';
+      const value = Math.max(0, Math.round(seconds));
+      if (value < 5) return 'just now';
+      if (value < 60) return value + 's ago';
+      const minutes = Math.floor(value / 60);
+      if (minutes < 60) return minutes + 'm ago';
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return hours + 'h ago';
+      const days = Math.floor(hours / 24);
+      if (days < 30) return days + 'd ago';
+      const months = Math.floor(days / 30);
+      if (months < 12) return months + 'mo ago';
+      return Math.floor(months / 12) + 'y ago';
+    },
+    durationLabel(seconds) {
+      if (seconds == null || !isFinite(seconds)) return 'unknown';
+      const value = Math.max(0, Math.round(seconds));
+      if (value < 60) return value + 's';
+      const minutes = Math.floor(value / 60);
+      if (minutes < 60) return minutes + 'm';
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return hours + 'h';
+      const days = Math.floor(hours / 24);
+      if (days < 30) return days + 'd';
+      const months = Math.floor(days / 30);
+      if (months < 12) return months + 'mo';
+      return Math.floor(months / 12) + 'y';
+    },
+    formatIso(value) {
+      if (!value) return 'unknown';
+      const date = new Date(value);
+      if (!isFinite(date.getTime())) return String(value);
+      return date.toLocaleString(undefined, {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      });
+    },
+    formatDate(epoch) {
+      if (epoch == null || !isFinite(epoch)) return 'unknown';
+      let epochMs = Number(epoch);
+      if (epochMs < 1e12) epochMs *= 1000;
+      const date = new Date(epochMs);
+      if (!isFinite(date.getTime())) return 'unknown';
+      return date.toLocaleString(undefined, {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      });
+    },
+    stateRaw(task) {
+      const state = task && task.current_state ? task.current_state.state : (task && task.state);
+      return String(state || 'unknown').toLowerCase().replace(/_/g, '-');
+    },
+    stateTone(task) {
+      const state = this.stateRaw(task);
+      if (state === 'working') return 'working';
+      if (state === 'blocked' || state === 'needs-decision' || state === 'failed') return 'blocked';
+      if (state === 'parked' || state === 'paused') return 'parked';
+      if (state === 'done') return 'done';
+      return 'other';
+    },
+    columnKey(task) {
+      return this.stateTone(task);
+    },
+    stateLabel(task) {
+      const state = this.stateRaw(task);
+      if (STATE_LABELS[state]) return STATE_LABELS[state];
+      return state.charAt(0).toUpperCase() + state.slice(1).replace(/-/g, ' ');
+    },
+    prUrl(task) {
+      if (!task) return null;
+      if (task.pr && task.pr.url) return task.pr.url;
+      if (task.backlog && task.backlog.pr_url) return task.backlog.pr_url;
+      return null;
+    },
+    reportLink(task) {
+      if (!task) return null;
+      const report = task.paths && task.paths.report;
+      if (!report || !report.present) return null;
+      return 'reports/' + encodeURIComponent(task.id) + '.md';
+    },
+    taskFor(id) {
+      if (!id) return null;
+      return this.tasks.find((task) => task.id === id) || null;
+    },
+    prBadgeClass(status) {
+      if (status === 'ready') return 'ok';
+      if (status === 'failing' || status === 'conflict' || status === 'error') return 'danger';
+      if (status === 'pending' || status === 'draft') return 'warn';
+      if (status === 'merged') return 'info';
+      return 'neutral';
+    },
+    prStatusLabel(status) {
+      const labels = {
+        ready: 'Ready',
+        failing: 'Checks failing',
+        conflict: 'Conflict',
+        pending: 'Checks pending',
+        merged: 'Merged',
+        draft: 'Draft',
+        closed: 'Closed',
+        error: 'Error',
+        unknown: 'Unknown',
+      };
+      return labels[status] || 'Unknown';
+    },
+    checksClass(checks) {
+      if (!checks) return 'muted';
+      if (checks.failed > 0) return 'danger-text';
+      if (checks.pending > 0) return 'muted';
+      if (checks.total > 0) return 'ok-text';
+      return 'muted';
+    },
+    impactBadge(impact) {
+      if (impact === 'high') return 'danger';
+      if (impact === 'medium') return 'warn';
+      return 'info';
+    },
+    healthBadge(health) {
+      if (health === 'ok' || health === 'healthy') return 'ok';
+      if (health === 'critical' || health === 'unhealthy' || health === 'unavailable') return 'danger';
+      if (health === 'tight' || health === 'stale' || health === 'mixed') return 'warn';
+      return 'neutral';
+    },
+    percentTone(value) {
+      if (value == null || !isFinite(value)) return 'mid';
+      if (value <= 10) return 'low';
+      if (value <= 25) return 'mid';
+      return 'ok';
+    },
+    bucketBadge(bucket) {
+      if (bucket === 'blocked') return 'danger';
+      if (bucket === 'held') return 'warn';
+      if (bucket === 'in_flight') return 'info';
+      return 'neutral';
+    },
+    bucketLabel(bucket) {
+      const labels = {
+        queued: 'Queued',
+        held: 'Held',
+        blocked: 'Blocked',
+        in_flight: 'In flight',
+      };
+      return labels[bucket] || 'Queued';
+    },
+    mateBadge(state) {
+      const value = String(state || '').toLowerCase();
+      if (value === 'idle' || value === 'present' || value === 'healthy') return 'ok';
+      if (value === 'working' || value === 'active') return 'info';
+      if (value === 'dead' || value === 'error' || value === 'blocked') return 'danger';
+      if (value === 'paused' || value === 'parked' || value === 'stale') return 'warn';
+      return 'neutral';
+    },
+    activityBadge(kind) {
+      if (kind === 'merge') return 'info';
+      if (kind === 'handoff') return 'ok';
+      if (kind === 'failure') return 'danger';
+      return 'neutral';
+    },
+    shortModel(model) {
+      if (!model) return 'unknown';
+      const text = String(model);
+      const parts = text.split('/');
+      return parts[parts.length - 1] || text;
+    },
+    anchor(file, section) {
+      return 'mem-' + file.key + '-' + section.id;
+    },
+    sectionsFor(file) {
+      if (!file || !file.content) return [];
+      return this.parseSections(file.content);
+    },
+    parseSections(content) {
+      const lines = String(content).split(/\r?\n/);
+      const sections = [];
+      let current = { id: 's0', title: 'Overview', level: 1, lines: [] };
+      let count = 0;
+      lines.forEach((line) => {
+        const match = /^(#{1,6})\s+(.*?)\s*#*\s*$/.exec(line);
+        if (!match) {
+          current.lines.push(line);
+          return;
+        }
+        const keep = current.title !== 'Overview' || current.lines.some((entry) => entry.trim());
+        if (keep) sections.push(current);
+        const level = match[1].length;
+        count += 1;
+        current = { id: 's' + count, title: match[2].trim(), level, lines: [] };
+      });
+      const keepLast = current.title !== 'Overview' || current.lines.some((entry) => entry.trim());
+      if (keepLast) sections.push(current);
+      return sections;
+    },
+    renderMarkdown(lines) {
+      const escape = escapeHtml;
+      const inline = (text) => {
+        let out = escape(text);
+        out = out.replace(/`([^`]+)`/g, '<code>$1</code>');
+        out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        out = out.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+        return out;
+      };
+      let html = '';
+      let paragraph = [];
+      let list = null;
+      let code = null;
+      const flushParagraph = () => {
+        if (paragraph.length) {
+          html += '<p>' + paragraph.map(inline).join('<br>') + '</p>';
+          paragraph = [];
+        }
+      };
+      const closeList = () => {
+        if (list) {
+          html += '</' + list + '>';
+          list = null;
+        }
+      };
+      lines.forEach((raw) => {
+        const text = String(raw).replace(/\s+$/, '');
+        const trimmed = text.trim();
+        if (trimmed.startsWith('```')) {
+          flushParagraph();
+          closeList();
+          if (code === null) {
+            code = [];
+            html += '<pre><code>';
+          } else {
+            html += code.map(escape).join('\n') + '</code></pre>';
+            code = null;
+          }
+          return;
+        }
+        if (code !== null) {
+          code.push(text);
+          return;
+        }
+        if (!trimmed) {
+          flushParagraph();
+          closeList();
+          return;
+        }
+        const bullet = /^[-*+]\s+(.*)$/.exec(trimmed);
+        const numbered = /^\d+[.)]\s+(.*)$/.exec(trimmed);
+        if (bullet || numbered) {
+          flushParagraph();
+          const wanted = bullet ? 'ul' : 'ol';
+          if (list !== wanted) {
+            closeList();
+            html += '<' + wanted + '>';
+            list = wanted;
+          }
+          const content = (bullet || numbered)[1];
+          html += '<li>' + inline(content) + '</li>';
+          return;
+        }
+        if (trimmed.startsWith('>')) {
+          flushParagraph();
+          closeList();
+          html += '<blockquote>' + inline(trimmed.slice(1).trim()) + '</blockquote>';
+          return;
+        }
+        if (/^---+$/.test(trimmed)) {
+          flushParagraph();
+          closeList();
+          html += '<hr>';
+          return;
+        }
+        paragraph.push(trimmed);
+      });
+      if (code !== null) html += code.map(escape).join('\n') + '</code></pre>';
+      flushParagraph();
+      closeList();
+      return html;
+    },
+  },
+  async mounted() {
+    this.view = this.viewFromHash();
+    this.ticker = setInterval(() => { this.now = Date.now(); }, 1000);
+    this.refresher = setInterval(() => { if (!document.hidden) this.refreshSnapshot(); }, 30000);
+    document.addEventListener('keydown', this.onKeydown);
+    document.addEventListener('visibilitychange', this.onVisibility);
+    await this.refreshSnapshot();
+    this.loadAway();
+    this.loadReviews();
+    this.loadView(this.view);
+  },
+  beforeUnmount() {
+    if (this.ticker) clearInterval(this.ticker);
+    if (this.refresher) clearInterval(this.refresher);
+    document.removeEventListener('keydown', this.onKeydown);
+    document.removeEventListener('visibilitychange', this.onVisibility);
+    document.body.style.overflow = '';
+  },
+}).mount('#app');
+</script>
+</body>
+</html>

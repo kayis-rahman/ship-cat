@@ -1,0 +1,9 @@
+[package]
+name = "fm-fleet-ui"
+version = "0.1.0"
+edition = "2021"
+description = "Read-only Fleet UI host for Shipcat/Firstmate (replaces fm-fleet-ui.sh Python server)"
+
+[[bin]]
+name = "fm-fleet-ui"
+path = "src/main.rs"

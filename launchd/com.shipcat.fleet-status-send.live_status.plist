@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.shipcat.fleet-status-send.live_status</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/kayisrahman/Documents/workspace/shipcat-bridge/scripts/fleet-status-send.sh</string>
+    <string>live_status</string>
+  </array>
+  <key>StartInterval</key>
+  <integer>30</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>FM_HOME</key>
+    <string>/Users/kayisrahman/Documents/workspace/firstmate</string>
+  </dict>
+</dict>
+</plist>
